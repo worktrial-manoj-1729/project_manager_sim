@@ -1,0 +1,51 @@
+
+Objects:
+- People:
+    - Role
+    - chat-id
+    - email
+    - Experience in company
+        - Tasks completed and their time taken
+    - Skills (OOD outside tasks completion)
+    - Constraints
+    - Existing PTO and dynamic PTO
+- Task tracking
+    - Project
+        - Priority/SLA
+        - Task?
+            - Description
+            - Progress
+            - Priority/SLA
+            - list[people]
+- Docs Management
+    - Doc 
+        - Content
+        - Access? - list[people]
+
+
+Tools:
+- chat 
+    - 1:1, group chat
+- gmail
+    - 1:1, group mail
+- calendar
+    - [start:end] list[people]
+    - at the end transcript is sent to all people in the meeting
+- Docs
+- Task
+
+
+Evaluation on:
+- F(tasks completed, tasks dropped | PC) - F(tasks completed, tasks dropped | no PC) 
+
+
+Some nice behaviors i am expecting:
+-
+- instead of pasting contents of doc, PC will share the doc! 
+
+
+
+
+Project Manager:
+- Onboarding
+- Goal?
