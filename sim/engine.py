@@ -262,9 +262,15 @@ class Engine:
         changes = {"assignees": [npc_id], "assigned_at": self.world.clock}
         if row and row.get("true_done_hours") is not None:
             changes["done_hours"] = row["true_done_hours"]
+        prev = [a for a in (task.get("assignees") or [])
+                if a != npc_id and a in self.world.npcs]
         task = self.world.update_task(task_id, changes, "agent")
         self.world.npcs[npc_id].notify(self.world.clock,
                                        "you've been assigned: '%s'" % task["title"])
+        for a in prev:   # losing a task is an event in YOUR week too
+            self.world.npcs[a].notify(
+                self.world.clock, "'%s' has been moved off your plate to %s"
+                % (task["title"], self.world.npcs[npc_id].name))
         self._say("[%s] you assigned %s -> %s"
                   % (self.world.now(), task_id, self.world.npcs[npc_id].name))
         # tracker-shaped acknowledgement, never the truth dict (beliefs,
@@ -425,7 +431,19 @@ class Engine:
         self._say("[%s] you scheduled '%s' %s (%d min) with %s"
                   % (self.world.now(), topic, fmt(start), duration,
                      ", ".join(attendees)))
-        return meeting
+        out = dict(meeting)
+        if task is not None:
+            # a session that cannot bank work must SAY so, not fail silently
+            from .tasks import work_minutes_between
+            t = self.world.find_task(task)
+            owner = (t.get("assignees") or [None])[0]
+            if owner not in attendees:
+                out["warning"] = ("task owner %s is not attending — this "
+                                  "session will bank NO work" % (owner or "?"))
+            elif work_minutes_between(start, end) <= 0:
+                out["warning"] = ("outside working hours — this session will "
+                                  "bank NO work")
+        return out
 
     def agent_cancel_meeting(self, meeting_id):
         """Clear a meeting off the calendar — frees its attendees' time and
@@ -507,10 +525,14 @@ class Engine:
         self._advance_action_clock()
         doc = self.world.add_doc(title, content, share_with)
         for a in share_with:
-            if a in self.world.npcs:
-                self.world.npcs[a].notify(self.world.clock,
-                                          "doc shared with you — '%s':\n%s"
-                                          % (title, content[:800]))
+            if a not in self.world.npcs:
+                continue
+            others = [self.world.npcs[o].name for o in share_with
+                      if o != a and o in self.world.npcs]
+            cc = (" (also shared with %s)" % ", ".join(others)) if others else ""
+            self.world.npcs[a].notify(self.world.clock,
+                                      "doc shared with you%s — '%s':\n%s"
+                                      % (cc, title, content[:800]))
         self._say("[%s] you shared doc '%s' with %s"
                   % (self.world.now(), title, ", ".join(share_with) or "nobody"))
         return doc

@@ -94,9 +94,9 @@ TOOLS = [
           lambda e, a: e.agent_email(a["to"], a["subject"], a["body"])),
 
     _tool("add_task",
-          "Add a task to the project board. Pass id if you're filing a ticket "
-          "someone referenced. With assignee+effort_hours it gets scheduled; "
-          "otherwise it's a tracking item.",
+          "Add a TRACKING item to the project board (a note everyone can "
+          "see). Items you create are never scheduled and earn no score — "
+          "real work arrives on its own.",
           {"title": {"type": "string"},
            "id": {"type": "string",
                   "description": "ticket reference id, if one was mentioned"},
@@ -210,7 +210,8 @@ TOOLS = [
           lambda e, a: _advance(e, int(a["minutes"]))),
 
     _tool("wait_for_reply",
-          "Advance time until the next chat message for you arrives.",
+          "Advance time until the next message reaches you — a chat, or an "
+          "email landing in your inbox.",
           {}, [],
           lambda e, a: {"replied": e.run_until_reply() is not None,
                         "now": e.world.now()}),
