@@ -82,6 +82,14 @@
   .flow .step b { display: block; font-size: 2.6vh; margin-bottom: .8vh; }
   .flow .step span { font-size: 1.9vh; color: var(--dim); line-height: 1.35; display: block; }
   .flow .arrow { align-self: center; color: var(--dim); font-size: 3vh; }
+  .loopback { position: relative; margin: 0 3% 3.5vh; height: 5vh;
+              border: 2px dashed var(--border); border-top: none;
+              border-radius: 0 0 18px 18px; }
+  .loopback span { position: absolute; top: 3.4vh; left: 50%; transform: translateX(-50%);
+                   background: var(--bg); padding: 0 1.4vw; white-space: nowrap;
+                   color: var(--dim); font-size: 2vh; }
+  .loopback span b { color: var(--ink); }
+  .loopback .lend { position: absolute; top: -1.4vh; font-size: 2.6vh; color: var(--accent); }
   footer { position: fixed; bottom: 2vh; left: 0; right: 0; display: flex;
            justify-content: space-between; padding: 0 3vw; color: var(--dim);
            font-size: 1.8vh; }
@@ -648,6 +656,11 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
     <div class="step"><b class="violet">stamp</b><span>the band <b>[baseline, OPT]</b></span></div>
     <div class="arrow">→</div>
     <div class="step"><b class="green">run &amp; watch</b><span>models play; dashboard grades</span></div>
+  </div>
+  <div class="loopback">
+    <span class="lend" style="left:8%">&#8593;</span>
+    <span class="lend" style="right:8%">&#8593;</span>
+    <span><b class="accent">&#8635; loop</b> — measure the band &amp; its <b>spread</b>, tweak <b>one seed number</b>, re-generate &nbsp;<span class="c">→ a self-tuning difficulty curriculum</span></span>
   </div>
   <ul style="margin-top:3vh">
     <li>Difficulty is <b>measured, never asserted</b> — an ablation audit shows which decision owns which slice of the band.</li>
