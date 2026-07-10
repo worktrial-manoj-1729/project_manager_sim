@@ -371,9 +371,15 @@ class Handler(BaseHTTPRequestHandler):
                             "urgent": bool(t.get("urgent")),
                             "arrival": arr["at"], "source": "external",
                             "via": arr.get("via", "chat")})
-            self._json({"start": start,
-                        "due": (scenario.get("project") or {}).get("due"),
-                        "tasks": out})
+            from .optimal import worker_ids
+            from .sim_time import working_minutes_between
+            due = (scenario.get("project") or {}).get("due")
+            workers = worker_ids(scenario)
+            self._json({"start": start, "due": due, "tasks": out,
+                        "workers": len(workers),
+                        "capacity_hours": (round(len(workers) *
+                            working_minutes_between(start, due) / 60.0, 1)
+                            if due else None)})
         elif url.path == "/api/transcript":
             # the agent's whole conversation, OpenAI chat format, untruncated
             src = self._src(url.query)

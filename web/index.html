@@ -328,6 +328,7 @@
           <span class="pn-miss">✗ not shipped</span>
           <span><b>x/y h</b> = hours already done at week start / total hours the task takes</span>
         </div>
+        <div id="problem-stats" class="legend" style="margin:6px 0 0"></div>
         <div id="problem-scroll"><div id="problem-canvas">
           <svg id="problem-edges"></svg>
           <div class="prob-cols" id="problem-cols"></div>
@@ -1267,6 +1268,25 @@ function renderProblem() {
 
   // ---- layered layout: column = dependency depth ----
   const depth = problemDepths(rec.tasks);
+
+  // at-a-glance shape of the problem: size, chain depth, pressure, ambushes
+  const stats = $("problem-stats");
+  if (stats) {
+    const seeds = rec.tasks.filter(t => t.source === "seed").length;
+    const lands = rec.tasks.length - seeds;
+    const maxDepth = Math.max(0, ...Object.values(depth)) + 1;
+    const remaining = rec.tasks.reduce((s, t) =>
+      s + Math.max(0, (t.effort_hours || 0) - (t.done_hours || 0)), 0);
+    const urgent = rec.tasks.filter(t => t.urgent).length;
+    const byMail = rec.tasks.filter(t => t.source !== "seed" && t.via === "email").length;
+    const cap = rec.capacity_hours;
+    stats.innerHTML =
+      `<span><b>${rec.tasks.length}</b> tasks (${seeds} seeded + ${lands} land mid-week${byMail ? `, ${byMail} by ✉` : ""})</span>` +
+      `<span>chain depth <b>${maxDepth}</b></span>` +
+      `<span><b>${remaining.toFixed(0)}h</b> of work` +
+      (cap ? ` / ${cap}h team capacity (<b>${(remaining / cap * 100).toFixed(0)}%</b> load, ${rec.workers} workers)` : "") + `</span>` +
+      (urgent ? `<span>⚡ <b>${urgent}</b> urgent</span>` : "");
+  }
   const cols = [];
   for (const t of rec.tasks)
     (cols[depth[t.id]] = cols[depth[t.id]] || []).push(t);
