@@ -572,11 +572,13 @@ function labelShort(l) {
 }
 
 /* ---- section 1: cross-task overview (2x2, shared axes) ---- */
+// skew: sqrt x-scale — for money/token axes only, where one expensive
+// outlier would squish the rest; turns and fairness stay linear
 const OV_CHARTS = [
-  {x: "mean_cost_usd", y: "mean_score",     ymin: -0.3, title: "mean score vs mean cost (USD)",          fmt: v => "$" + v.toFixed(2)},
-  {x: "mean_turns",    y: "mean_score",     ymin: -0.3, title: "mean score vs mean agent turns",         fmt: v => String(Math.round(v))},
-  {x: "mean_fairness", y: "mean_score",     ymin: -0.3, title: "mean score vs mean workload fairness",   fmt: v => v.toFixed(2)},
-  {x: "mean_cost_usd", y: "mean_done_rate", ymin: 0,    title: "mean done-rate vs mean cost (USD)",      fmt: v => "$" + v.toFixed(2)},
+  {x: "mean_cost_usd", y: "mean_score",     ymin: -0.3, skew: true,  title: "mean score vs mean cost (USD)",        fmt: v => "$" + v.toFixed(2)},
+  {x: "mean_turns",    y: "mean_score",     ymin: -0.3, skew: false, title: "mean score vs mean agent turns",       fmt: v => String(Math.round(v))},
+  {x: "mean_fairness", y: "mean_score",     ymin: -0.3, skew: false, title: "mean score vs mean workload fairness", fmt: v => v.toFixed(2)},
+  {x: "mean_cost_usd", y: "mean_done_rate", ymin: 0,    skew: true,  title: "mean done-rate vs mean cost (USD)",    fmt: v => "$" + v.toFixed(2)},
 ];
 
 function renderBenchOverview() {
@@ -607,10 +609,8 @@ function ovChartSVG(cfg) {
     for (const m of Object.values(rec.models))
       if (m[cfg.x] != null && m[cfg.y] != null) { xmax = Math.max(xmax, m[cfg.x]); any = true; }
   xmax *= 1.15;
-  // sqrt scale on skewed axes (cost, tokens): one expensive outlier must
-  // not squish every other task into the left margin; sqrt keeps zero at
-  // zero, stays monotone, and needs no log-of-zero special case
-  const X = v => mL + Math.sqrt(Math.max(0, v) / xmax) * (W - mL - mR);
+  const X = v => mL + (cfg.skew ? Math.sqrt(Math.max(0, v) / xmax)
+                                : Math.max(0, v) / xmax) * (W - mL - mR);
   const Y = v => mT + (1 - (Math.max(YMIN, Math.min(YMAX, v)) - YMIN) / (YMAX - YMIN)) * (H - mT - mB);
   let g = "";
   for (const yt of (YMIN < 0 ? [-0.25, 0.25, 0.5, 0.75] : [0.25, 0.5, 0.75]))
@@ -622,8 +622,10 @@ function ovChartSVG(cfg) {
   for (const yt of [0, 0.5, 1])
     g += `<text x="${mL-5}" y="${Y(yt)+3}" font-size="9" text-anchor="end" fill="var(--ink-3)">${yt.toFixed(1)}</text>`;
   for (let i = 0; i <= 3; i++) {
-    const v = xmax * Math.pow(i / 3, 2);   // even pixels under the sqrt scale
-    g += `<text x="${X(v)}" y="${H-14}" font-size="9" text-anchor="middle" fill="var(--ink-3)">${cfg.fmt(v)}</text>`;
+    // ticks at even PIXEL spacing under whichever scale is active
+    const v = xmax * (cfg.skew ? Math.pow(i / 3, 2) : i / 3);
+    const anch = i === 3 ? "end" : i === 0 ? "start" : "middle";
+    g += `<text x="${X(v)}" y="${H-14}" font-size="9" text-anchor="${anch}" fill="var(--ink-3)">${cfg.fmt(v)}</text>`;
   }
   g += `<text x="${(mL+W-mR)/2}" y="${H-2}" font-size="10" text-anchor="middle" fill="var(--ink-2)">${cfg.title}</text>`;
   if (!any)
@@ -660,7 +662,10 @@ function ovChartSVG(cfg) {
     }
     if (showLabels) {
       const end = pts[pts.length - 1];   // highest-tier point = line end
-      labelSpots.push({x: X(end[cfg.x]) + 6, y: Y(end[cfg.y]) + 3,
+      const px = X(end[cfg.x]);
+      const flip = px > W - 110;         // no room to the right: label left
+      labelSpots.push({x: flip ? px - 8 : px + 6, y: Y(end[cfg.y]) + 3,
+                       anchor: flip ? "end" : "start",
                        color, ta, name: rec.task});
     }
   }
@@ -673,7 +678,7 @@ function ovChartSVG(cfg) {
     for (const p of placed)
       if (Math.abs(p.x - l.x) < 130 && l.y - p.y < 11) l.y = p.y + 11;
     placed.push(l);
-    ends += `<text x="${l.x}" y="${l.y}" font-size="9"
+    ends += `<text x="${l.x}" y="${l.y}" font-size="9" text-anchor="${l.anchor || "start"}"
       fill="${l.color}" opacity=".85" data-bt-vis="${l.ta}">${esc(l.name)}</text>`;
   }
   return `<svg width="100%" viewBox="0 0 ${W} ${H}">${g}${marks}${ends}${hits}</svg>`;
