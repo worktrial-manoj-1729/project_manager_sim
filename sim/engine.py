@@ -415,7 +415,12 @@ class Engine:
         end = start + duration
         cap = self.world.scenario.get("costs", {}).get(
             "max_meeting_minutes_per_day", 180)
+        ooo = {n["id"]: n.get("ooo", []) for n in self.world.scenario["npcs"]}
         for a in attendees:
+            for (os_, oe) in ooo.get(a, []):
+                if os_ < end and start < oe:   # can't meet someone who's OUT
+                    return {"error": "%s is out of office %s-%s"
+                            % (a, fmt(os_), fmt(oe))}
             for m in self.world.meetings:
                 if m.get("cancelled") or a not in m["attendees"]:
                     continue

@@ -170,6 +170,12 @@ class World:
         workers = {n["id"] for n in self.scenario.get("npcs", [])
                    if n.get("worker", True)}
         busy = {}
+        # OUT-OF-OFFICE: authored blocks (PTO, another project, an offsite) when a
+        # person is simply unavailable — no task work, and no meeting can be booked
+        # over them. A per-person partial-availability knob, replayable from config.
+        for n in self.scenario.get("npcs", []):
+            for iv in n.get("ooo", []):
+                busy.setdefault(n["id"], []).append((iv[0], iv[1]))
         for m in self.meetings:
             if m.get("cancelled"):
                 continue  # a cancelled meeting never happens — frees the block
