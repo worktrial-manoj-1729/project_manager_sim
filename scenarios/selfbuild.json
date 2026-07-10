@@ -1,0 +1,258 @@
+{
+  "seed": 42,
+  "company": "Loomstate, a 30-person dev-tools startup building an agent-evaluation platform",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "costs": {
+    "chat_interrupt_minutes": 10,
+    "_note": "Refocus tax: work-hours the recipient loses per CHAT the PM sends (serialized; email is exempt)."
+  },
+  "answer_batch_minutes": 120,
+  "_answer_note": "A blocked engineer unblocks instantly on a CHAT reply; an EMAIL reply only lands on the next 120-min grid tick.",
+  "_note": "SELF-REFERENTIAL scenario: the project IS this PM-simulation environment (per Problem.txt) — ship a reviewer-runnable repo by Friday. Same capacity-binding skeleton as crunch.json (over-subscribed week -> forced triage), re-themed onto the real deliverables. Hidden physics planted: Maya is fast on the engine, Raj on eval/docs; the engine's headline '80% done' is really ~55% (a replay determinism bug surfaces Tuesday); the polished Web UI is a P2 herring (Problem.txt: 'a lightweight interface is fine'); the grading-doc looks like a 1h formality but is 4h; and Maya is BLOCKED on the determinism-boundary decision until the PM makes the call.",
+  "project": {
+    "id": "pm-sim-env",
+    "name": "PM-Simulation Environment (reviewer deliverable)",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "design-spec",
+        "title": "Architecture design doc (state/time/event semantics)",
+        "assignees": [
+          "raj"
+        ],
+        "effort_hours": 6,
+        "done_hours": 6,
+        "reported": "Done (landed 2 days late)",
+        "priority": "P0",
+        "tags": [
+          "spec"
+        ]
+      },
+      {
+        "id": "engine-core",
+        "title": "Discrete-event engine + preemptive scheduler + replay",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 66,
+        "done_hours": 22,
+        "blocked_by": [
+          "design-spec"
+        ],
+        "reported": "~70% done, on track for Friday",
+        "priority": "P0",
+        "questions": [
+          {
+            "id": "determinism-boundary",
+            "at": 1980,
+            "gates": true,
+            "held_by": "maya",
+            "ping": "I need your call on the determinism boundary before I can finish replay: do we re-run the NPC LLM calls on replay (simpler, but non-deterministic) or fold state purely from the event log with captured text (deterministic, more plumbing)? It changes the core loop and I'm blocked on the engine until you decide. One-line answer, but I can't move till I hear back."
+          }
+        ],
+        "belief": [
+          {
+            "pct": 70,
+            "note": "on track for Friday"
+          },
+          {
+            "at": 2280,
+            "pct": 55,
+            "note": "found a co-temporal event-ordering bug — replay isn't byte-identical, so the whole determinism story is at risk; actually ~55%, roughly 35 focused hours of real work left. Friday is at serious risk",
+            "proactive_ping": true
+          }
+        ],
+        "tags": [
+          "engine"
+        ]
+      },
+      {
+        "id": "eval-band",
+        "title": "Evaluation: [baseline, OPT] band + scorecard",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 12,
+        "done_hours": 0,
+        "blocked_by": [
+          "engine-core"
+        ],
+        "reported": "Not started",
+        "priority": "P0",
+        "tags": [
+          "engine"
+        ]
+      },
+      {
+        "id": "web-ui",
+        "title": "Polished web UI for browsing runs",
+        "assignees": [
+          "raj"
+        ],
+        "effort_hours": 20,
+        "done_hours": 10,
+        "reported": "About half done",
+        "priority": "P2",
+        "tags": [
+          "ui"
+        ]
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 2130,
+      "npc": "raj",
+      "announce": "A blocker just surfaced: a teammate tried a clean clone and the system won't start — a missing step in the setup path, exactly the 'clone and run locally' thing the reviewer will do first. It's a P1. Tell Alex, offer to take it, but be honest: if you grab it, the Web UI slips and you can't help Maya on the engine. Say explicitly it's Alex's call who owns it.",
+      "task": {
+        "id": "clean-clone-repro",
+        "title": "P1: fresh clone won't start (reviewer's first flow is broken)",
+        "effort_hours": 8,
+        "urgent": true,
+        "reported": "On Raj (setup/repro)",
+        "priority": "P1",
+        "assignees": [
+          "raj"
+        ],
+        "tags": [
+          "eval"
+        ]
+      }
+    },
+    {
+      "at": 3780,
+      "npc": "dana",
+      "announce": "The reviewer explicitly wants a grading explainer — the score components, an example scorecard, and how the evaluator resists reward hacking. Tell Alex it exists, that it looks like a quick formality (an hour, you reckon), and pointedly ask who owns it, because right now nobody does.",
+      "task": {
+        "id": "grading-doc",
+        "title": "Grading explainer doc (score components + anti-hacking)",
+        "effort_hours": 4,
+        "reported": "Landed on Maya by default — she is underwater on the engine",
+        "priority": "P1",
+        "assignees": [
+          "maya"
+        ]
+      }
+    },
+    {
+      "at": 4860,
+      "npc": "dana",
+      "via": "email",
+      "announce": "Write Alex an email: the reviewer needs the README before they'll even try the repo — setup, how to start it, how to drive the main flows, how to run the evaluation. It got dropped on Maya by default, but she's heads-down on the engine and can't get to it. Flag that it needs a real owner who can land it in time.",
+      "task": {
+        "id": "readme-setup",
+        "title": "README: setup, run, drive flows, run eval (reviewer entry point)",
+        "effort_hours": 2,
+        "reported": "Landed on Maya by default — needs an owner who can actually produce it in time",
+        "priority": "P1",
+        "assignees": [
+          "maya"
+        ],
+        "tags": [
+          "docs"
+        ]
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "dana",
+      "intent": "The Friday reviewer handoff is on your mind and you want a concrete, current status picture from Alex today. React naturally to however your conversation stands — don't assume anything your chat history contradicts."
+    },
+    {
+      "at": 4890,
+      "npc": "dana",
+      "condition": {
+        "task_not_done": "eval-band"
+      },
+      "intent": "It's Thursday morning, the reviewer handoff is tomorrow 17:00, and the evaluation/scorecard still isn't working end-to-end. You need a firm answer about Friday today, before you update the reviewer. React naturally given whatever Alex has or hasn't told you — pointed if you've been kept in the dark, focused on the decision if you've been kept informed."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "maya",
+      "name": "Maya Chen",
+      "role": "Senior Systems Engineer",
+      "persona": "Deep systems thinker, direct, but guarded about her own setbacks. She hedges when asked vaguely about progress, and only comes clean about problems when asked a direct, specific question. Not rude — just a little defensive about the engine being behind.",
+      "knowledge": [
+        "You own the discrete-event engine, scheduler, and replay — the core of the deliverable, due (with the eval band on top) Friday 17:00 for the reviewer handoff.",
+        "As of Monday you believe the tracker's ~70% is about right — you haven't re-checked since the design spec landed late.",
+        "Raj's design spec landed 2 days late — you don't like blaming teammates, so you soften this unless pressed.",
+        "After the engine itself there is still a ~12-hour evaluation/band task that nobody has started, and it can't begin until the engine's replay is solid.",
+        "You are blocked on one decision only the PM/tech-lead can make: whether replay re-runs NPC model calls or folds purely from the logged text. You can't finish the core loop until that's decided."
+      ],
+      "skills": {
+        "engine": 1.3
+      }
+    },
+    {
+      "id": "raj",
+      "name": "Raj Patel",
+      "role": "ML / Eval Engineer",
+      "persona": "Cheerful, chatty, upfront to a fault. Happy to volunteer information, sometimes more than asked. Uses casual language and the occasional emoji.",
+      "knowledge": [
+        "You built the design spec (late — a prod incident ate your week) and you own the evaluation-facing pieces and the Web UI.",
+        "You feel bad about the late spec handoff and will readily admit it.",
+        "You're CONVINCED the polished Web UI is critical for the reviewer — 'reviewers love a good demo', you heard it somewhere, and you say so with confidence.",
+        "That said, you'd pause the Web UI if the PM explicitly decides that — you trust the PM's call, and you know the eval and setup code well if help is needed.",
+        "You are strong at the eval/scoring and repro side, and decent at docs."
+      ],
+      "skills": {
+        "eval": 1.3,
+        "docs": 1.2
+      }
+    },
+    {
+      "id": "dana",
+      "name": "Dana Okoro",
+      "role": "Eng Lead / reviewer liaison (stakeholder)",
+      "worker": false,
+      "persona": "Deadline-focused and terse, but professional. Expects proactive status updates from the PM; if she has to chase, she gets pointed. Escalates crisply when she senses slippage — mentions the reviewer, asks for firm dates, dislikes vague reassurance.",
+      "knowledge": [
+        "The full reviewer deliverable — runnable repo, one authored scenario, README, and a grading explainer — was promised for Friday 17:00.",
+        "You don't know the engineering details — Maya owns the engine, Raj owns eval and the UI.",
+        "The reviewer is senior and will judge coherence and realism, not polish; a broken clone or a missing README is very visible.",
+        "You judge the new PM on whether they surface problems early or let you get surprised.",
+        "You believe the grading explainer doc is a quick ~1 hour formality."
+      ]
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [
+    {
+      "id": "web-ui-criticality",
+      "held_by": "raj",
+      "claim": "the polished Web UI is reviewer-critical",
+      "truth": "Problem.txt says a lightweight interface is fine — it is P2 and off the critical path; chasing it directly costs a P1"
+    },
+    {
+      "id": "grading-doc-size",
+      "held_by": "dana",
+      "claim": "the grading explainer is a ~1 hour formality",
+      "truth": "it is 4 hours of real writing — trusting her under-allocates and it misses the reviewer handoff"
+    }
+  ],
+  "band": {
+    "no_pm_baseline": {
+      "combined": 21.082,
+      "completion": 24.659,
+      "efficiency": 13.929,
+      "done_weight_rate": 0.579
+    },
+    "opt_max": {
+      "combined": 28.363,
+      "completion": 34.667,
+      "efficiency": 15.757,
+      "done_weight_rate": 0.789
+    },
+    "winnable_combined": 7.281,
+    "log10_trajectory_classes": 12.2,
+    "capacity_utilization": 0.95,
+    "forced_triage": true,
+    "min_reaction_ratio": 1.07,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}

@@ -7,6 +7,8 @@
     "chat_interrupt_minutes": 10,
     "_note": "Refocus tax: work-hours the recipient loses per CHAT the PM sends (serialized; email is exempt). The knob for how much interrupting people costs — raise it to punish chatty PMs harder, set 0 to make communication free (ablation)."
   },
+  "answer_batch_minutes": 120,
+  "_answer_note": "When a worker is blocked on a question, a CHAT reply unblocks them instantly; an EMAIL reply only lands on the next 120-min grid tick — the async cost the PM trades against the chat focus-tax. This is the 'chat wins for an urgent unblock' knob.",
   "_note": "Capacity-BINDING variant of demo.json for GRPO training: the week is over-subscribed (migration blown out to 52h so the P0 chain can't fully land even at OPT -> forced triage), and the org's fallback pickups for the questionnaire/readiness asks fire too late to finish -> a proactive PM captures ~6 points of completion the no-PM org misses. Turns the reward from a cliff into a ramp: winnable value is spread across P1 completion + efficiency + a genuine P0 sacrifice.",
   "project": {
     "id": "checkout-migration",
@@ -41,6 +43,15 @@
         ],
         "reported": "~70% done, on track for Friday",
         "priority": "P0",
+        "questions": [
+          {
+            "id": "cutover-call",
+            "at": 1980,
+            "gates": true,
+            "held_by": "sarah",
+            "ping": "Before I go further on the migration I need your call on the cutover approach — online (zero-downtime, slower) or a maintenance window (faster but needs sign-off). I can't safely run the core step until you decide. One-line answer, but I'm stuck on it till I hear back."
+          }
+        ],
         "belief": [
           {
             "pct": 70,
@@ -224,18 +235,18 @@
   ],
   "band": {
     "no_pm_baseline": {
-      "combined": 22.269,
-      "completion": 26.667,
-      "efficiency": 13.473,
+      "combined": 21.082,
+      "completion": 24.659,
+      "efficiency": 13.929,
       "done_weight_rate": 0.579
     },
     "opt_max": {
-      "combined": 28.364,
+      "combined": 28.363,
       "completion": 34.667,
       "efficiency": 15.757,
       "done_weight_rate": 0.789
     },
-    "winnable_combined": 6.095,
+    "winnable_combined": 7.281,
     "log10_trajectory_classes": 12.2,
     "capacity_utilization": 0.95,
     "forced_triage": true,

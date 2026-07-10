@@ -1,0 +1,406 @@
+{
+  "seed": 42,
+  "company": "Meridian — the 8-person platform team (6 engineers + 2 leads) shipping the Meridian v2 platform",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "costs": {
+    "chat_interrupt_minutes": 10,
+    "max_meeting_minutes_per_day": 180
+  },
+  "answer_batch_minutes": 120,
+  "_note": "LARGE, dense-signal week: a v2 platform launch due Friday 17:00. Deep, WIDE critical path — the backend API gates web, mobile, and data, so THREE engineers sit idle behind it (coordination/pooling is load-bearing here, unlike the smaller weeks). Band share is deliberately SPREAD: two blocking decisions on two P0s, a hidden specialist map with mis-routed defaults, two herrings, and a belief blow-up. 6 workers × 11 tasks -> OPT uses the greedy reference anchor.",
+  "project": {
+    "id": "meridian-v2",
+    "name": "Meridian v2 platform launch",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "design-specs",
+        "title": "API contract + UX specs (dependency for every build)",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 10,
+        "done_hours": 10,
+        "reported": "Done (landed 2 days late)",
+        "priority": "P0",
+        "tags": [
+          "design"
+        ]
+      },
+      {
+        "id": "api-core",
+        "title": "Core backend API (auth, billing, sync) — web/mobile/data depend on it",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 60,
+        "done_hours": 18,
+        "blocked_by": [
+          "design-specs"
+        ],
+        "reported": "~70% done, on track",
+        "priority": "P0",
+        "tags": [
+          "backend"
+        ],
+        "questions": [
+          {
+            "id": "data-model-call",
+            "at": 1980,
+            "gates": true,
+            "held_by": "maya",
+            "ping": "I need your call on the data model before I can lock the API: single multi-tenant schema, or per-tenant DBs? Billing and sync both hang off it and I can't move the core forward until you decide. One line, but I'm blocked till I hear back."
+          }
+        ],
+        "belief": [
+          {
+            "remaining_frac": 0.15,
+            "held_by": "maya",
+            "note": "nearly there, just cleanup"
+          },
+          {
+            "at": 2280,
+            "remaining_frac": 0.7,
+            "held_by": "maya",
+            "proactive_ping": true,
+            "note": "the billing/sync integration is far deeper than I let on — most of the real work is still ahead. Friday is at serious risk"
+          }
+        ]
+      },
+      {
+        "id": "web-app",
+        "title": "Web app (dashboard, checkout)",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 18,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-core"
+        ],
+        "reported": "Waiting on the API contract",
+        "priority": "P1",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "mobile-app",
+        "title": "Mobile app (iOS + Android)",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 18,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-core"
+        ],
+        "reported": "Waiting on the API contract",
+        "priority": "P1",
+        "tags": [
+          "mobile"
+        ]
+      },
+      {
+        "id": "data-pipeline",
+        "title": "Analytics + billing data pipeline",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 14,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-core"
+        ],
+        "reported": "Waiting on the API",
+        "priority": "P1",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "infra-scaling",
+        "title": "Production infra: autoscaling, failover, rollout",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 22,
+        "done_hours": 6,
+        "reported": "~30% done",
+        "priority": "P0",
+        "tags": [
+          "infra"
+        ],
+        "questions": [
+          {
+            "id": "region-call",
+            "at": 3420,
+            "gates": true,
+            "held_by": "leo",
+            "ping": "Blocked on a launch-infra decision only you/product can make: do we go multi-region (safer, needs a day more) or single-region for v2 and add failover post-launch? The rollout plan forks here and I can't finish infra until you choose."
+          }
+        ]
+      },
+      {
+        "id": "qa-integration",
+        "title": "End-to-end QA + release sign-off",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 14,
+        "done_hours": 0,
+        "blocked_by": [
+          "web-app",
+          "mobile-app"
+        ],
+        "reported": "Not started (needs the app builds)",
+        "priority": "P1",
+        "tags": [
+          "qa"
+        ]
+      },
+      {
+        "id": "analytics-dashboard",
+        "title": "Polished internal analytics dashboard",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 16,
+        "done_hours": 6,
+        "reported": "About 40% done",
+        "priority": "P2",
+        "tags": [
+          "data"
+        ]
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 2130,
+      "npc": "raj",
+      "announce": "Security flagged a pre-launch audit we have to clear before shipping — auth review, dependency CVEs, a pen-test checklist. Tell Alex it exists, that it lands on Maya by default (she owns auth), and ask who should actually own it — she's underwater on the API.",
+      "task": {
+        "id": "security-audit",
+        "title": "P1: pre-launch security audit (auth review, CVEs, pen-test checklist)",
+        "effort_hours": 10,
+        "reported": "Landed on Maya by default — she is buried in the API",
+        "priority": "P1",
+        "assignees": [
+          "maya"
+        ],
+        "tags": [
+          "security"
+        ]
+      }
+    },
+    {
+      "at": 3300,
+      "npc": "leo",
+      "announce": "A production incident on the CURRENT platform just paged — a billing webhook is dropping events for a big customer. P1, urgent. It auto-assigned to Maya (she owns billing code) but she's on the v2 API. Tell Alex, and be honest that you (Leo) could take it but then infra slips. It's Alex's call.",
+      "task": {
+        "id": "prod-incident",
+        "title": "P1: prod billing webhook dropping events (current platform)",
+        "effort_hours": 8,
+        "urgent": true,
+        "reported": "Auto-assigned to Maya (billing owner) — she's on v2",
+        "priority": "P1",
+        "assignees": [
+          "maya"
+        ],
+        "tags": [
+          "backend"
+        ]
+      }
+    },
+    {
+      "at": 4860,
+      "npc": "nora",
+      "via": "email",
+      "announce": "Write Alex an email: the launch needs a customer-facing runbook + release notes before Friday cutover — real content an engineer has to write. It got dropped on Maya by default; she can't get to it. Flag it needs an owner with actual capacity.",
+      "task": {
+        "id": "launch-runbook",
+        "title": "Launch runbook + release notes (customer-facing)",
+        "effort_hours": 6,
+        "reported": "Landed on Maya by default — needs a real owner with capacity",
+        "priority": "P1",
+        "assignees": [
+          "maya"
+        ],
+        "tags": [
+          "docs"
+        ]
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "nora",
+      "intent": "The Friday launch is on your mind; you want a concrete, current status picture from Alex today. React naturally to however your conversation stands — don't assume anything your chat history contradicts."
+    },
+    {
+      "at": 4890,
+      "npc": "nora",
+      "condition": {
+        "task_not_done": "qa-integration"
+      },
+      "intent": "It's Thursday morning, launch is tomorrow 17:00, and QA still hasn't started because the builds aren't done. You need a firm go/no-go answer today before you brief the exec team. React naturally given whatever Alex has or hasn't told you — pointed if kept in the dark, focused on the decision if kept informed."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "maya",
+      "name": "Maya Chen",
+      "role": "Backend Lead",
+      "persona": "Deep backend engineer, direct, but guarded about her own slippage. Hedges when asked vaguely; only comes clean when asked a direct, specific question. Defensive about the API being behind.",
+      "knowledge": [
+        "You own the core v2 API (auth, billing, sync) — web, mobile, and data all depend on it, due Friday for launch.",
+        "You told everyone it's nearly done; you haven't re-checked since you hit the billing/sync integration.",
+        "Three engineers (Ivy, Arjun, Dev) are effectively idle until you lock the API contract.",
+        "You're blocked on one decision only product/PM can make: single multi-tenant schema vs per-tenant DBs. You can't lock the API until it's decided.",
+        "You also own the legacy billing code, so incidents there default to you — but you can't do both."
+      ],
+      "skills": {
+        "backend": 1.4
+      }
+    },
+    {
+      "id": "ivy",
+      "name": "Ivy Park",
+      "role": "Frontend Engineer",
+      "persona": "Sharp, proactive, a little impatient. Speaks up when blocked. Happy to help elsewhere — she knows she's idle until the API lands.",
+      "knowledge": [
+        "You own the web app. You can't make real progress until Maya locks the API, so you're mostly idle now.",
+        "You're strong on web and can do some mobile in a pinch.",
+        "If asked, you'd gladly pair on the API to unblock everyone, or take other work."
+      ],
+      "skills": {
+        "web": 1.4,
+        "mobile": 1.1
+      }
+    },
+    {
+      "id": "arjun",
+      "name": "Arjun Mehta",
+      "role": "Mobile Engineer",
+      "persona": "Steady, thorough, less talkative. Answers what he's asked. Idle waiting on the API but won't volunteer it unless asked.",
+      "knowledge": [
+        "You own the mobile app; blocked until the API contract is locked.",
+        "You're strong on mobile, decent on general app work.",
+        "You'd help on the API or elsewhere if the PM explicitly asks."
+      ],
+      "skills": {
+        "mobile": 1.4
+      }
+    },
+    {
+      "id": "quinn",
+      "name": "Quinn Alvarez",
+      "role": "QA Engineer",
+      "persona": "Detail-obsessed, calm, dryly funny. Flags risks early. Blocked until the builds land and will say so if asked.",
+      "knowledge": [
+        "You own end-to-end QA and release sign-off — can't start until web and mobile are built.",
+        "You're strong at QA/test automation and can pitch in on repro/verification.",
+        "You quietly doubt the polished analytics dashboard is launch-critical, but it's not your call."
+      ],
+      "skills": {
+        "qa": 1.4
+      }
+    },
+    {
+      "id": "dev",
+      "name": "Dev Okonkwo",
+      "role": "Data Engineer",
+      "persona": "Creative, enthusiastic, chatty. Cares about the internal analytics looking great. Uses casual language and the odd emoji.",
+      "knowledge": [
+        "You own the data pipeline (blocked on the API) and the polished internal analytics dashboard.",
+        "You're CONVINCED the analytics dashboard is launch-critical — 'execs will look at it day one'.",
+        "You'd pause the dashboard if the PM decides that, and you're decent at docs/runbooks.",
+        "You're strong on data, decent on docs."
+      ],
+      "skills": {
+        "data": 1.3,
+        "docs": 1.2
+      }
+    },
+    {
+      "id": "leo",
+      "name": "Leo Santos",
+      "role": "Infra / SRE",
+      "persona": "Calm under fire, terse, pragmatic. Surfaces risk plainly. Will take on incidents but flags the tradeoff.",
+      "knowledge": [
+        "You own production infra for launch — autoscaling, failover, rollout — and you're blocked on a multi-region vs single-region decision only product/PM can make.",
+        "You can jump on a production incident, but then launch infra slips.",
+        "You're strong on infra and can do some backend if needed."
+      ],
+      "skills": {
+        "infra": 1.4,
+        "backend": 1.1
+      }
+    },
+    {
+      "id": "nora",
+      "name": "Nora Bianchi",
+      "role": "VP Product (stakeholder)",
+      "worker": false,
+      "persona": "Deadline-focused, terse, professional. Expects proactive updates; gets pointed if she has to chase. Escalates crisply on slippage — mentions the launch date, asks for firm dates, dislikes vague reassurance.",
+      "knowledge": [
+        "The v2 launch — working web + mobile on the new API, infra ready, QA signed off — was promised Friday 17:00.",
+        "You don't know engineering details — Maya owns the API, Ivy web, Arjun mobile, Dev data, Leo infra, Quinn QA.",
+        "A slipped launch is very visible to the exec team and the board.",
+        "You judge the PM on surfacing problems early vs letting you get surprised.",
+        "You think the security audit is a quick checkbox exercise."
+      ]
+    },
+    {
+      "id": "raj",
+      "name": "Raj Iyer",
+      "role": "Eng Director (stakeholder)",
+      "worker": false,
+      "persona": "Measured, asks good questions, protective of the team's focus. Won't do tickets but will weigh in on priorities and decisions when asked.",
+      "knowledge": [
+        "You care that the launch is real and the team isn't thrashing.",
+        "You don't take tickets, but you can help the PM think through tradeoffs and decisions.",
+        "You know security flagged a pre-launch audit that must clear before shipping."
+      ]
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [
+    {
+      "id": "analytics-criticality",
+      "held_by": "dev",
+      "claim": "the polished analytics dashboard is launch-critical",
+      "truth": "it is P2 internal tooling — a lightweight view is fine for launch; chasing the polish costs the critical path"
+    },
+    {
+      "id": "security-audit-size",
+      "held_by": "nora",
+      "claim": "the security audit is a quick checkbox",
+      "truth": "it is ~10h of real work and it blocks shipping — under-allocating it misses the gate"
+    }
+  ],
+  "band": {
+    "no_pm_baseline": {
+      "combined": 28.384,
+      "completion": 32.649,
+      "efficiency": 19.853,
+      "done_weight_rate": 0.556
+    },
+    "opt_max": {
+      "combined": 35.145,
+      "completion": 42.102,
+      "efficiency": 21.231,
+      "done_weight_rate": 0.704
+    },
+    "winnable_combined": 6.761,
+    "log10_trajectory_classes": 18.3,
+    "capacity_utilization": 0.62,
+    "forced_triage": true,
+    "min_reaction_ratio": 1.23,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}

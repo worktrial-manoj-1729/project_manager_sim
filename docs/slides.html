@@ -137,15 +137,15 @@ result    same seed + same actions = the same week, byte for byte  <span class="
   <div class="cols3">
     <div>
       <div class="ex"><b class="accent">chat wins</b>
-<span class="c">Fri 09:30</span> Sarah is blocked NOW
-on a one-line answer you have.
+<span class="c">Fri 09:30</span> Sarah's task is <b>STALLED</b>
+until you answer one question.
 
-chat  → unblocked in ≤45 min
-        <span class="c">20-min tax ≪ hours blocked</span>
-email → sits ~2h in her inbox
-        <b class="red">the morning is gone</b>
-meet  → calendars + a slot:
-        the priciest way to
+chat  → reply lands <b>at once</b> →
+        unblocked. <span class="c">20-min tax ≪</span>
+        <span class="c">the hours she'd sit idle</span>
+email → waits ~2h for her inbox
+        → <b class="red">the morning is gone</b>
+meet  → a room booked to
         say one sentence</div>
     </div>
     <div>
@@ -218,14 +218,15 @@ and Dave insists: "rate-limiting is launch-critical!"   <span class="c">← auth
 <section class="slide">
   <div class="kicker">2 · belief updates — one task's week</div>
   <h2>What the agent can know, and when</h2>
-  <div class="ex"><span class="c">Mon 09:05</span>  board: "~70%, on track"        <span class="c">Sarah believes it. truth: 55%.</span>
-<span class="c">Tue 14:00</span>  belief-update event fires → Sarah <b>realizes</b> 55%
-           she pings you, unprompted: "schema rework surfaced — ~18 focused hours left"
-<span class="c">Wed 10:00</span>  you ask again → her honest <i>current</i> belief   <span class="c">(still not truth)</span>
+  <div class="ex"><span class="c">Mon 09:05</span>  Sarah's estimate: "~8h left"   <span class="c">honest. wrong. truth: ~36h.</span>
+<span class="c">Tue 14:00</span>  belief-update event fires → Sarah <b>realizes</b> it's ~36h
+           she pings you, unprompted: "the SDK integration blew up — ~36h left, not 8"
+<span class="c">Wed 10:00</span>  you ask again → her honest <i>current</i> estimate   <span class="c">(still not truth)</span>
 <span class="c">Thu 16:30</span>  migration actually completes → board flips to <b class="green">Done</b>
            <span class="c">two completions ≈ a speed estimate for that person</span></div>
-  <p class="cap">The graded skill: operate under honest noise — keep slack, react fast to
-  confessions, calibrate people from what actually ships.</p>
+  <p class="cap">Estimates are in <b>hours-left</b>, not %, and the blind spot belongs to the <b>person</b>:
+  reassign the task to a fresh owner and Sarah's stale number doesn't follow. The graded skill —
+  keep slack, react fast to confessions, calibrate people from what actually ships.</p>
 </section>
 
 <!-- 7 · skills -->
@@ -258,39 +259,42 @@ what the agent can notice:
   way into. The perfect week routes by skill, so discovering specialists is part of the job.</p>
 </section>
 
-<!-- 8 · skills combine in meetings -->
+<!-- 8 · putting more than one person on a task -->
 <section class="slide">
-  <div class="kicker">3 · skills — combined in working sessions</div>
-  <h2>Meetings can move work — boundedly</h2>
+  <div class="kicker">3 · skills — more than one person on a task</div>
+  <h2>More hands help — but only a meeting makes them count</h2>
   <div class="cols">
     <div>
       <div class="ex">migration is the bottleneck (Sarah's, db).
-book a working session ON it:
+three ways to add Dave:
 
-  schedule_meeting(
-    attendees=[sarah, dave],
-    task="migration", 2h)
-
-rate = 1.3 <span class="c">(sarah, best)</span>
-     + 0.6 × 1.0 <span class="c">(dave)</span>  = <b class="green">1.9×</b>
-→ 2h room ⇒ <b class="green">3.8h</b> of progress,
-  banked when the meeting ends</div>
+<b>solo</b> Sarah                  → 1.3×
+<b>+Dave, no meeting</b>           → <b class="amber">1.5×</b>
+   <span class="c">both hack at one task, uncoordinated —
+   they conflict &amp; duplicate. barely helps.</span>
+<b>+Dave, 2h session</b> on the task → <b class="green">1.9×</b>
+   <span class="c">1.3 + 0.6×1.0, banked at meeting-end.
+   the sync is what makes his hands land.</span></div>
+      <p class="cap">solo &lt; parallel &lt; meeting — the meeting <b>buys</b> that last jump.</p>
     </div>
     <div>
       <div class="ex">the fine print:
-  helpers add 1, 0.6, 0.36, … of
-  their rate — <b>capped at 2.5×</b>
+  hands cap out — 1, 0.6, 0.36, …
+  parallel <b>≤ 1.5×</b>, meeting <b>≤ 2.5×</b>
+  never linear in headcount.
 
-  a 6-person pile-on ≈ a 3-person
-  session. never linear in headcount.
-
-the bill:
+the bill (either way):
   Dave's own 30h queue is <b class="red">frozen</b>
-  for those 2 hours.</div>
+  while he's on Sarah's task —
+  a meeting also books a <b class="red">room-hour</b>
+  for everyone in it.
+
+<span class="c">→ worth it for a real bottleneck or an
+  idle teammate; a net loss otherwise.</span></div>
     </div>
   </div>
   <p class="foot">“Adding manpower to a late software project makes it later.” — Fred Brooks,
-  <i>The Mythical Man-Month</i> (1975). The cap and the fading weights are that law as physics.</p>
+  <i>The Mythical Man-Month</i> (1975). The two caps and the fading weights are that law as physics.</p>
 </section>
 
 <!-- 9 · rubrics: the scale -->
@@ -301,16 +305,18 @@ the bill:
     <div class="rail"></div>
     <div class="tick" style="left:10%"><i></i><span><b>&lt; 0</b> made the week worse<br class="sub">pings, churn, busywork</span></div>
     <div class="tick" style="left:38%"><i></i><span><b>0</b> = the unmanaged week<br class="sub">defaults play out, agent does nothing</span></div>
-    <div class="tick" style="left:88%"><i></i><span><b>1</b> = the best solo week<br class="sub">every task one owner, zero friction — computed by search</span></div>
+    <div class="tick" style="left:82%"><i></i><span><b>1</b> = best <b>solo</b> week<br class="sub">one owner per task, zero friction — a reference, not a ceiling</span></div>
   </div>
-  <div class="ex">one generated instance <span class="c">(both anchors computed from the config file, before any agent runs)</span>:
-  unmanaged week ships <b>58%</b> of the work-weight   → score 0
-  best solo week ships <b>100%</b>, early              → score 1
+  <div class="ex">both anchors computed from the config file <span class="c">— before any agent runs</span>:
+  unmanaged week ships <b>58%</b> of the work-weight   → score <b>0</b>
+  best <b>solo</b> week ships 100%, early              → score <b>1</b>  <span class="c">(one owner/task)</span>
   an agent ships 79%, mostly early                → score <b class="amber">0.41</b>
-  score <b class="green">&gt; 1</b> is possible — and means one thing: <b>well-run working sessions</b>
-  <span class="c">collaboration is the only lever that can beat the solo optimum (and it's capped)</span></div>
-  <p class="cap">The gap's width IS the difficulty: how wrong the week's default assignments are.
-  A generator remixes the numbers; gates reject anything unfair or trivial.</p>
+  score <b class="green">&gt; 1</b> is real, not a bug — the agent <b>out-coordinated the solo optimum</b>:
+  <span class="c">pulling idle teammates onto the bottleneck (parallel work, or a session) —
+  a lever a one-owner schedule can't use. bounded by the caps. never clamped.</span></div>
+  <p class="cap">Why an <i>unbeatable</i> ceiling isn't needed: the score is an <b>affine</b> map of COMBINED,
+  and GRPO advantages are affine-invariant (next slide) — so <b>1</b> only has to be a cheap, stable
+  anchor. The gap's width IS the difficulty: how wrong the week's defaults are.</p>
 </section>
 
 <!-- 9b · complexity levers -->
@@ -405,7 +411,7 @@ $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model
 
 <footer>
   <span>project_manager_sim</span>
-  <span id="pos">1 / 11</span>
+  <span id="pos">1 / 13</span>
   <span>← → to navigate</span>
 </footer>
 

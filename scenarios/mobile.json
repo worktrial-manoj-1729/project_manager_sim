@@ -1,0 +1,303 @@
+{
+  "seed": 42,
+  "company": "Northwind — the 6-person launch team (5 engineers + a product lead) shipping the Northwind v1.0 mobile app",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "costs": {
+    "chat_interrupt_minutes": 10,
+    "_note": "Refocus tax: work-minutes the recipient loses per CHAT the PM sends (serialized; email is exempt)."
+  },
+  "answer_batch_minutes": 120,
+  "_answer_note": "A blocked engineer unblocks instantly on a CHAT reply; an EMAIL reply lands only on the next 120-min grid tick.",
+  "_note": "Mobile app v1.0 launch, due Friday 17:00. Deep critical path (design -> api -> iOS/Android -> QA) with a heavy API bottleneck that IDLES the mobile engineers until it clears — the central lesson is to swarm/unblock the bottleneck rather than let the team sit. Hidden physics: Sam is fast on backend, Ivy/Arjun on their platforms; the API's '~8h left' is really ~36h (a payments-SDK integration blew up, surfaces Tuesday); the polished marketing site is a P2 herring; the privacy review looks like a 1h formality but is 4h; and Sam is BLOCKED on the auth-flow decision until the PM calls it.",
+  "project": {
+    "id": "northwind-mobile-v1",
+    "name": "Northwind v1.0 mobile app launch",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "design-system",
+        "title": "Design system + screen specs (dependency for the app builds)",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 8,
+        "done_hours": 8,
+        "reported": "Done (landed 2 days late)",
+        "priority": "P0",
+        "tags": [
+          "design"
+        ]
+      },
+      {
+        "id": "api-backend",
+        "title": "Backend API (auth, payments, sync) — the app depends on it",
+        "assignees": [
+          "sam"
+        ],
+        "effort_hours": 56,
+        "done_hours": 20,
+        "blocked_by": [
+          "design-system"
+        ],
+        "reported": "~65% done, on track for Friday",
+        "priority": "P0",
+        "questions": [
+          {
+            "id": "auth-flow-call",
+            "at": 1980,
+            "gates": true,
+            "held_by": "sam",
+            "ping": "I need your call on the auth flow before I can lock the API contract: do we ship the new OAuth/social login for v1, or keep the simple email+password and add OAuth post-launch? The payments and sync endpoints hang off this decision and I'm blocked until you choose. One-line answer, but I can't move the API forward till I hear back."
+          }
+        ],
+        "belief": [
+          {
+            "remaining_frac": 0.14,
+            "held_by": "sam",
+            "note": "nearly there, just polish left"
+          },
+          {
+            "at": 2280,
+            "remaining_frac": 0.64,
+            "held_by": "sam",
+            "note": "the third-party payments SDK integration is far worse than I thought — undocumented webhooks, retries, reconciliation. Realistically ~two-thirds of the work is still ahead, not the polish I claimed. Friday is at serious risk",
+            "proactive_ping": true
+          }
+        ],
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "ios-app",
+        "title": "iOS app build (screens, API integration)",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-backend"
+        ],
+        "reported": "Waiting on the API contract",
+        "priority": "P1",
+        "tags": [
+          "ios"
+        ]
+      },
+      {
+        "id": "android-app",
+        "title": "Android app build (screens, API integration)",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-backend"
+        ],
+        "reported": "Waiting on the API contract",
+        "priority": "P1",
+        "tags": [
+          "android"
+        ]
+      },
+      {
+        "id": "qa-integration",
+        "title": "End-to-end QA + release-candidate sign-off",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 12,
+        "done_hours": 0,
+        "blocked_by": [
+          "ios-app",
+          "android-app"
+        ],
+        "reported": "Not started (needs both app builds)",
+        "priority": "P1",
+        "tags": [
+          "qa"
+        ]
+      },
+      {
+        "id": "marketing-site",
+        "title": "Polished marketing landing page + launch video",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 20,
+        "done_hours": 8,
+        "reported": "About 40% done",
+        "priority": "P2",
+        "tags": [
+          "web"
+        ]
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 3780,
+      "npc": "nora",
+      "announce": "App Review's privacy questionnaire just came in — data collection disclosures, third-party SDK list, a data-deletion flow — and it MUST be submitted before we can ship. Tell Alex it exists, that it looks like a quick formality (an hour, you'd guess), and pointedly ask who owns it, because right now nobody does.",
+      "task": {
+        "id": "privacy-review",
+        "title": "App Store privacy review + data-deletion disclosures (submission blocker)",
+        "effort_hours": 4,
+        "reported": "Landed on Sam by default — he is underwater on the API",
+        "priority": "P1",
+        "assignees": [
+          "sam"
+        ],
+        "tags": [
+          "legal"
+        ]
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "nora",
+      "intent": "The Friday launch is on your mind and you want a concrete, current status picture from Alex today. React naturally to however your conversation stands — don't assume anything your chat history contradicts."
+    },
+    {
+      "at": 4890,
+      "npc": "nora",
+      "condition": {
+        "task_not_done": "qa-integration"
+      },
+      "intent": "It's Thursday morning, launch is tomorrow 17:00, and QA still hasn't started because the app builds aren't done. You need a firm answer about Friday today, before you brief the exec team. React naturally given whatever Alex has or hasn't told you — pointed if you've been kept in the dark, focused on the decision if you've been kept informed."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "sam",
+      "name": "Sam Rivera",
+      "role": "Backend Engineer",
+      "persona": "Strong backend engineer, direct, but guarded about his own slippage. Hedges when asked vaguely about progress, only comes clean about problems when asked a direct, specific question. Not rude — just defensive about the API being behind.",
+      "knowledge": [
+        "You own the backend API (auth, payments, sync) — the whole app depends on it, due Friday 17:00 for launch.",
+        "As of Monday you told everyone it's nearly done — you haven't re-checked since you started the payments SDK integration.",
+        "The design specs landed 2 days late, which is part of why you're behind, but you don't like blaming teammates.",
+        "The iOS and Android builds can't really start until you lock the API contract — three engineers are effectively waiting on you.",
+        "You are blocked on one decision only the PM/product can make: whether v1 ships OAuth/social login or simple email+password. You can't lock the API until that's decided."
+      ],
+      "skills": {
+        "backend": 1.3
+      }
+    },
+    {
+      "id": "ivy",
+      "name": "Ivy Park",
+      "role": "iOS Engineer",
+      "persona": "Sharp and proactive, a little impatient. Speaks up when she's blocked. Happy to help elsewhere if the PM asks — she's fast and knows she's currently idle waiting on the API.",
+      "knowledge": [
+        "You own the iOS build. You can't make real progress until Sam locks the API contract, so you're mostly idle right now.",
+        "You're strong on iOS and decent on general mobile/app-integration work.",
+        "If the PM asks, you'd happily pair with Sam on the API to help unblock everyone, or take on other mobile work."
+      ],
+      "skills": {
+        "ios": 1.3,
+        "mobile": 1.2
+      }
+    },
+    {
+      "id": "arjun",
+      "name": "Arjun Mehta",
+      "role": "Android Engineer",
+      "persona": "Steady and thorough, less talkative. Answers what he's asked. Also idle waiting on the API but won't volunteer that unless asked directly.",
+      "knowledge": [
+        "You own the Android build. Like Ivy, you're blocked until the API contract is locked.",
+        "You're strong on Android and decent on general mobile work.",
+        "You'd help on the API or elsewhere if the PM explicitly asks, but you won't push for it."
+      ],
+      "skills": {
+        "android": 1.3,
+        "mobile": 1.2
+      }
+    },
+    {
+      "id": "quinn",
+      "name": "Quinn Alvarez",
+      "role": "QA Engineer",
+      "persona": "Detail-obsessed, calm, dryly funny. Flags risks early. Currently blocked (nothing to test until the builds land) and will say so if asked.",
+      "knowledge": [
+        "You own end-to-end QA and the release-candidate sign-off — you can't start until both app builds are done.",
+        "You're strong at QA and test automation, and you can pitch in on repro/verification work if asked.",
+        "You quietly think the polished marketing site is not launch-critical, but it's not your call."
+      ],
+      "skills": {
+        "qa": 1.3
+      }
+    },
+    {
+      "id": "dev",
+      "name": "Dev Okonkwo",
+      "role": "Designer / Frontend",
+      "persona": "Creative, enthusiastic, chatty. Cares a lot about the launch looking polished. Will happily talk up the marketing site's importance. Uses casual language and the occasional emoji.",
+      "knowledge": [
+        "You finished the design system (2 days late) and now own the polished marketing landing page + launch video.",
+        "You're CONVINCED the marketing site is critical for launch day — 'first impressions matter', you say with confidence.",
+        "That said, you'd pause the marketing site if the PM explicitly decides that — you trust the PM's call, and you can help with app-side design or docs if needed.",
+        "You're strong at design and decent at web/frontend."
+      ],
+      "skills": {
+        "design": 1.3,
+        "web": 1.2
+      }
+    },
+    {
+      "id": "nora",
+      "name": "Nora Bianchi",
+      "role": "Head of Product (stakeholder)",
+      "worker": false,
+      "persona": "Deadline-focused and terse, but professional. Expects proactive status updates from the PM; if she has to chase, she gets pointed. Escalates crisply when she senses slippage — mentions the launch date, asks for firm dates, dislikes vague reassurance.",
+      "knowledge": [
+        "The v1.0 launch — working iOS and Android apps, submitted to the stores — was promised for Friday 17:00.",
+        "You don't know the engineering details — Sam owns the API, Ivy/Arjun the apps, Quinn QA, Dev design/marketing.",
+        "A slipped launch is very visible to the exec team and the board.",
+        "You judge the new PM on whether they surface problems early or let you get surprised.",
+        "You believe the App Store privacy review is a quick ~1 hour formality."
+      ]
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [
+    {
+      "id": "marketing-criticality",
+      "held_by": "dev",
+      "claim": "the polished marketing site is launch-critical",
+      "truth": "it is P2 — a lightweight page is fine for launch day; chasing the polish costs the critical path"
+    },
+    {
+      "id": "privacy-size",
+      "held_by": "nora",
+      "claim": "the App Store privacy review is a ~1 hour formality",
+      "truth": "it is ~4 hours of real work and it blocks store submission — trusting the estimate under-allocates it"
+    }
+  ],
+  "band": {
+    "no_pm_baseline": {
+      "combined": 14.856,
+      "completion": 16.943,
+      "efficiency": 10.683,
+      "done_weight_rate": 0.412
+    },
+    "opt_max": {
+      "combined": 24.743,
+      "completion": 30.556,
+      "efficiency": 13.117,
+      "done_weight_rate": 0.882
+    },
+    "winnable_combined": 9.887,
+    "log10_trajectory_classes": 7.7,
+    "capacity_utilization": 0.46,
+    "forced_triage": true,
+    "min_reaction_ratio": 1.53,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}
