@@ -128,6 +128,24 @@ DEFAULT_PHYSICS = {
 }
 
 
+def merge_minutes(spans, lo, hi):
+    """Total minutes covered by `spans` within [lo, hi), overlaps merged —
+    the calendar-occupancy primitive (a ping inside a meeting counts once)."""
+    clipped = sorted((max(s, lo), min(e, hi)) for s, e in spans
+                     if e > lo and s < hi)
+    total, cur_s, cur_e = 0, None, None
+    for s, e in clipped:
+        if cur_e is None or s > cur_e:
+            if cur_e is not None:
+                total += cur_e - cur_s
+            cur_s, cur_e = s, e
+        else:
+            cur_e = max(cur_e, e)
+    if cur_e is not None:
+        total += cur_e - cur_s
+    return total
+
+
 def physics_of(scenario):
     p = dict(DEFAULT_PHYSICS)
     p.update((scenario or {}).get("physics", {}))

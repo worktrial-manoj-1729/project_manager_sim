@@ -299,6 +299,29 @@ class World:
                 out.setdefault(tid, []).append((m["end"], dep))
         return out
 
+    def calendar_load(self, horizon):
+        """{person: calendar-HOURS occupied in [start, horizon]}: scheduled
+        work segments + meetings + interruption taxes, overlap-merged.
+        CALENDAR time, never effort — a specialist doing 12 effort-hours at
+        1.3x is occupied 9 1/4 h, and a swarm session counts once (the meeting
+        block), never block + deposit."""
+        from .tasks import compute_schedule, merge_minutes, physics_of
+        sched = compute_schedule(self.tasks, self.start_time,
+                                 self.busy_by_assignee(), self.skills(),
+                                 self.meeting_deposits(),
+                                 answers=self.question_answers(),
+                                 physics=physics_of(self.scenario))
+        spans = {}
+        for tid, info in sched.items():
+            t = self.find_task(tid)
+            person = (t.get("assignees") or [None])[0]
+            for seg in info.get("segments", []):
+                spans.setdefault(person, []).append((seg[0], seg[1]))
+        for person, bs in self.busy_by_assignee().items():
+            spans.setdefault(person, []).extend(bs)
+        return {p: round(merge_minutes(v, self.start_time, horizon) / 60.0, 2)
+                for p, v in spans.items()}
+
     def question_answers(self):
         """{task_id: {question_id: answered_at}} — when the PM's reply to each
         BLOCKING question was DELIVERED to its owner. Derived (replayable) from

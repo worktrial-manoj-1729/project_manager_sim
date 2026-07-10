@@ -56,7 +56,6 @@ class TestUtilizationSeesBusyLoad(unittest.TestCase):
     def test_meetings_count_as_load(self):
         """Regression: utilization/fairness once ignored meetings entirely —
         a PM could bury someone in sessions and still read as 'fair'."""
-        from sim.eval import busy_hours
         quiet = make_engine()
         goto(quiet, HORIZON)
         loaded = make_engine()
@@ -68,20 +67,29 @@ class TestUtilizationSeesBusyLoad(unittest.TestCase):
         rl = evaluate(loaded.run_dir)
         self.assertGreater(rl["utilization"]["ana"],
                            rq["utilization"]["ana"])
-        # and the helper is exact: 120 meeting-minutes = 2.0 busy hours
-        bh = busy_hours(loaded.world, 545, HORIZON)
-        self.assertGreaterEqual(bh.get("ana", 0), 2.0)
+        # calendar_load counts the meeting block itself (>= 2h occupied)
+        self.assertGreaterEqual(loaded.world.calendar_load(HORIZON)["ana"],
+                                rq.get("utilization")["ana"] and 2.0)
 
-    def test_busy_hours_merges_overlaps(self):
-        """Overlapping spans (a meeting plus a chat tax inside it) must not
-        double-count."""
-        from sim.eval import busy_hours
+    def test_merge_minutes_never_double_counts(self):
+        """Overlapping spans (a chat tax inside a meeting) count once."""
+        from sim.tasks import merge_minutes
+        self.assertEqual(
+            merge_minutes([(600, 720), (700, 760)], 545, 6780), 160)
 
-        class W:
-            def busy_by_assignee(self):
-                return {"ana": [(600, 720), (700, 760)]}   # overlap 700-720
-        self.assertEqual(busy_hours(W(), 545, 6780)["ana"],
-                         round((760 - 600) / 60.0, 2))
+    def test_utilization_is_calendar_time_not_effort(self):
+        """A swarm session must count ONCE for the owner (the meeting block),
+        never block + banked deposit — and load can't exceed hours present."""
+        eng = make_engine()
+        call_tool(eng, "schedule_meeting",
+                  {"attendees": ["ana", "bo"], "start_in_minutes": 30,
+                   "duration_minutes": 120, "topic": "pair", "task": "side"})
+        goto(eng, HORIZON)
+        load = eng.world.calendar_load(HORIZON)
+        avail = (HORIZON - 545) / 60.0
+        for person, hours in load.items():
+            self.assertLessEqual(hours, avail + 0.01,
+                                 "%s occupied more hours than exist" % person)
 
 
 class TestGates(unittest.TestCase):

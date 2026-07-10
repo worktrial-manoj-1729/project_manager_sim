@@ -150,19 +150,29 @@ class RunHub:
                             task = (json.load(f).get("project") or {}).get("id", "")
                     except (OSError, ValueError):
                         task = ""
+                # RE-SCORE from the immutable events.jsonl with CURRENT code —
+                # never trust the cached scorecard.json (written by whatever code
+                # ran the rollout; a re-stamp or scoring change makes it stale,
+                # the exact false-signal trap sim.bench also guards against).
+                # Gate on scorecard.json EXISTING = the run FINISHED (don't score
+                # a partial in-progress run — that keeps it flagged `live`); the
+                # mtime cache means this fresh re-score happens once per run.
                 if os.path.exists(sp):
-                    with open(sp) as f:
-                        sc = json.load(f)
-                    score = sc.get("score")
-                    if isinstance(sc.get("completion"), dict):
-                        completion = sc["completion"].get("normalized")
-                        efficiency = sc["efficiency"].get("normalized")
-                    if isinstance(sc.get("done_weight_rate"), dict):
-                        done_rate = sc["done_weight_rate"].get("agent")
-                    if isinstance(sc.get("workload_fairness"), dict):
-                        fairness = sc["workload_fairness"].get("agent")
-                    if isinstance(sc.get("combined"), dict):
-                        band = sc["combined"].get("available")
+                    try:
+                        from .eval import evaluate
+                        sc = evaluate(d)
+                        score = sc.get("score")
+                        if isinstance(sc.get("completion"), dict):
+                            completion = sc["completion"].get("normalized")
+                            efficiency = sc["efficiency"].get("normalized")
+                        if isinstance(sc.get("done_weight_rate"), dict):
+                            done_rate = sc["done_weight_rate"].get("agent")
+                        if isinstance(sc.get("workload_fairness"), dict):
+                            fairness = sc["workload_fairness"].get("agent")
+                        if isinstance(sc.get("combined"), dict):
+                            band = sc["combined"].get("available")
+                    except Exception:
+                        pass   # live/in-progress or un-scorable run — no score
                 n = 0
                 if os.path.exists(ep):
                     with open(ep) as f:

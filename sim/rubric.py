@@ -87,19 +87,24 @@ def task_value(task_rows, cfg, horizon, sim_start, workers=None,
     utilization, utilization_std, workload_fairness = None, None, None
     if workers:
         avail_h = working_minutes_between(sim_start, horizon) / 60.0
-        # a person's LOAD = task hours worked + busy hours (meetings and
-        # interruption taxes, supplied by the caller from world physics) —
-        # without the busy term, burying someone in sessions reads as
-        # "fair" while actually consuming their week
-        worked = {w: (busy_hours or {}).get(w, 0.0) for w in workers}
-        for t in task_rows:
-            if t.get("source") == "agent" or not t.get("effort_hours"):
-                continue
-            a = (t.get("assignees") or [None])[0]
-            if a in worked:
-                # only hours worked WITHIN the graded window count
-                done = min(t.get("true_done_hours") or 0.0, t["effort_hours"])
-                worked[a] += max(0.0, done - (t.get("seed_done_hours") or 0.0))
+        if busy_hours is not None:
+            # CALENDAR mode (live/replayed worlds): the caller supplies each
+            # person's true calendar occupancy — work segments + meetings +
+            # interruption taxes, overlap-merged (world.calendar_load). Never
+            # mixed with effort-hours: a specialist's 12 effort-hours at 1.3x
+            # occupy 9 1/4 calendar-hours, and a swarm session counts once.
+            worked = {w: busy_hours.get(w, 0.0) for w in workers}
+        else:
+            # EFFORT approximation (config-only paths like OPT, where no
+            # schedule segments exist): task effort-hours per current owner
+            worked = dict.fromkeys(workers, 0.0)
+            for t in task_rows:
+                if t.get("source") == "agent" or not t.get("effort_hours"):
+                    continue
+                a = (t.get("assignees") or [None])[0]
+                if a in worked:
+                    done = min(t.get("true_done_hours") or 0.0, t["effort_hours"])
+                    worked[a] += max(0.0, done - (t.get("seed_done_hours") or 0.0))
         if avail_h > 0:
             utilization = {w: round(h / avail_h, 3) for w, h in worked.items()}
             vals = list(utilization.values())
