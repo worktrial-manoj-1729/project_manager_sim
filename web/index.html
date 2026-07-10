@@ -1104,7 +1104,7 @@ function renderPmTraj() {
       seenGroups.add(e.group);
       const tos = evs.filter(f => f.kind === "message" && f.group === e.group)
                      .map(f => short(f.recipient));
-      row(e.t, `✉ → <b>${tos.join(", ")}</b>: ${clip(e.text)}`);
+      row(e.t, `${e.via === "email" ? "✉" : "💬"} → <b>${tos.join(", ")}</b>: ${clip(e.text)}`);
       continue;
     }
     if (e.kind === "message" && e.sender === "agent")

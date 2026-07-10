@@ -52,9 +52,23 @@ def _knowable_at(arr, scenario):
     return arr["at"] + 1
 
 
-def _run_policy(scenario, name, opt, timing, owner, noisy=False):
-    """One deterministic trajectory. timing: 'early'|'late'. owner:
-    'opt'|'fallback'."""
+def _gating_questions(scenario):
+    """(open_time, holder) for every blocking question — the oracle must ANSWER
+    these to unblock the critical path, so they belong in the policy timeline."""
+    out = []
+    for t in scenario["project"]["tasks"]:
+        holder = (t.get("assignees") or [None])[0]
+        for q in t.get("questions") or []:
+            if q.get("gates"):
+                out.append((q["at"], q.get("held_by") or holder))
+    return out
+
+
+def _run_policy(scenario, name, opt, timing, noisy=False, answer_qs=True):
+    """One deterministic trajectory. timing: 'early'|'late'. answer_qs: whether
+    the policy answers blocking questions (chat to the holder the moment each
+    opens) — a lever an oracle MUST pull, since an unanswered gate stalls the
+    critical path exactly as the do-nothing baseline does."""
     tag = (scenario.get("project") or {}).get("id", "x")
     run_dir = "runs/intent-%s-%s" % (tag, name)
     # a fresh dir ALWAYS: reusing one appends to the old event log and the
@@ -84,6 +98,8 @@ def _run_policy(scenario, name, opt, timing, owner, noisy=False):
                 ping(want)
 
     horizon_guess = load_horizon(scenario)
+    # one timeline mixing arrival-reassignments and blocking-question answers,
+    # executed in time order
     plan = []
     for arr in scenario.get("task_arrivals", []):
         when = _knowable_at(arr, scenario)
@@ -92,12 +108,21 @@ def _run_policy(scenario, name, opt, timing, owner, noisy=False):
         who = opt["assignment"].get(arr["task"]["id"])
         default = (arr["task"].get("assignees") or [None])[0]
         if who and who != default:   # same-owner reassign is pure loss
-            plan.append((when, arr["task"]["id"], who))
-    for when, tid, who in sorted(plan):
+            plan.append((when, "assign", arr["task"]["id"], who))
+    if answer_qs:
+        for at, holder in _gating_questions(scenario):
+            when = at + 1 if timing != "late" else min(at + 1440, horizon_guess - 120)
+            plan.append((when, "answer", holder, None))
+    for when, kind, a, b in sorted(plan, key=lambda x: (x[0], x[1])):
         goto(when)
-        call_tool(eng, "assign_task", {"task_id": tid, "npc": who})
-        if noisy:
-            ping(who)
+        if kind == "assign":
+            call_tool(eng, "assign_task", {"task_id": a, "npc": b})
+            if noisy:
+                ping(b)
+        else:  # answer the blocker via a quick chat to its holder
+            call_tool(eng, "send_chat",
+                      {"npc": a, "text": "decision made — go with option A; "
+                                         "you're unblocked."})
 
     goto(load_horizon(scenario))
     return evaluate(run_dir)
@@ -114,7 +139,7 @@ def load_horizon(scenario):
 def audit(scenario):
     opt = opt_ideal(scenario)
     runs = {
-        "oracle": _run_policy(scenario, "oracle", opt, "early", "opt"),
+        "oracle": _run_policy(scenario, "oracle", opt, "early"),
     }
     if runs["oracle"]["score"] is None:
         return {"degenerate": True, "scores": {}, "mechanism_shares": {},
@@ -122,15 +147,18 @@ def audit(scenario):
                         "policy to win. Re-author or regenerate (sim.generate "
                         "gates this out automatically)."}
     runs.update({
-        "late":   _run_policy(scenario, "late", opt, "late", "opt"),
-        "noisy":  _run_policy(scenario, "noisy", opt, "early", "opt",
-                              noisy=True),
+        "late":   _run_policy(scenario, "late", opt, "late"),
+        "noisy":  _run_policy(scenario, "noisy", opt, "early", noisy=True),
+        # blind = oracle allocation/timing but NEVER answers the blockers:
+        # isolates how much of the band the gating decisions own
+        "blind":  _run_policy(scenario, "blind", opt, "early", answer_qs=False),
     })
     top = runs["oracle"]["score"]
     mechanisms = {
-        "timing (rearrange early, not late)": top - runs["late"]["score"],
-        "allocation (owner choice)":          runs["late"]["score"],
-        "channel discipline (focus tax)":     top - runs["noisy"]["score"],
+        "answering blockers (unblock the gate)": top - runs["blind"]["score"],
+        "timing (rearrange early, not late)":    top - runs["late"]["score"],
+        "allocation (owner + skill routing)":    runs["late"]["score"],
+        "channel discipline (focus tax)":        top - runs["noisy"]["score"],
     }
     return {"scores": {k: v["score"] for k, v in runs.items()},
             "odds": {k: v.get("score_odds") for k, v in runs.items()},

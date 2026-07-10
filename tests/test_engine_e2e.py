@@ -101,8 +101,29 @@ class TestLiveness(unittest.TestCase):
                                  "body": "b"}))
         self.assertEqual(r, {"sent": False, "bounced": ["ghost@nowhere"]})
         r, _ = unwrap(call_tool(eng, "send_chat", {"npc": "ghost", "text": "x"}))
-        self.assertIn("error", r)
+        # chat and email bounce with the SAME shape — one contract
+        self.assertEqual(r, {"sent": False, "bounced": ["ghost"]})
         self.assertEqual(len(eng.world.messages), n_msgs)  # nothing delivered
+
+    def test_group_chat_is_one_send(self):
+        """A group ping: one action-minute total, delivered simultaneously,
+        every recipient sees the to-line, every copy shares a group id,
+        and EACH recipient pays their own focus tax."""
+        eng = make_engine()
+        t0 = eng.world.clock
+        r, _ = unwrap(call_tool(eng, "send_chat",
+                                {"to": ["ana", "bo"], "text": "standup in 5"}))
+        self.assertTrue(r.get("sent"))
+        self.assertEqual(eng.world.clock, t0 + 1)        # ONE composition
+        msgs = eng.world.messages[-2:]
+        self.assertEqual(msgs[0].group, msgs[1].group)   # explicit group id
+        self.assertIsNotNone(msgs[0].group)
+        ana = "\n".join(m["content"] for m in eng.world.npcs["ana"].context
+                        if m["role"] == "user")
+        self.assertIn("with Bo", ana)                    # coherent to-line
+        busy = eng.world.busy_by_assignee()
+        self.assertIn("ana", busy)                       # both taxed
+        self.assertIn("bo", busy)
 
     def test_reprioritize_tool(self):
         eng = make_engine()

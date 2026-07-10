@@ -178,39 +178,55 @@ class Engine:
         self._schedule((msg.time // batch + 1) * batch, "email_delivery",
                        {"msg_id": msg.id})
 
+    def agent_chat(self, npc_ids, text):
+        """One GROUP chat ping: composed once (one action-minute), delivered
+        to every recipient at the same instant, each seeing who else is on
+        the thread. Every recipient pays their own focus tax and replies on
+        their own latency. Unknown recipients bounce, never crash."""
+        if not npc_ids:
+            return {"error": "give npc (one person) or to (several)"}
+        known = [n for n in npc_ids if n in self.world.npcs]
+        bounced = [n for n in npc_ids if n not in self.world.npcs]
+        if known:
+            self._advance_action_clock()
+        agent_name = self.world.scenario.get("agent_name", "the PM")
+        gid = len(self.world.messages) if len(known) > 1 else None
+        for nid in known:
+            npc = self.world.npcs[nid]
+            msg = self.world.send_message("agent", nid, text, via="chat",
+                                          group=gid)
+            others = [self.world.npcs[o].name for o in known if o != nid]
+            cc = (", with %s" % ", ".join(others)) if others else ""
+            npc.notify(self.world.clock, "%s (chat%s): %s"
+                       % (agent_name, cc, text))
+            if in_working_hours(self.world.clock):
+                # the tax is FELT, not just charged: the same focus-minutes
+                # busy_by_assignee subtracts lands in the holder's
+                # experience, so testimony about it stays honest
+                npc.notify(self.world.clock,
+                           "(that ping just broke your concentration — it'll "
+                           "take you a good while to get back into deep work)")
+            due = npc.response_time(self.world.clock, via="chat")
+            due = self.world.defer_for_meetings(nid, due, npc.rng)
+            self._schedule(due, "npc_respond", {"npc": nid, "message_id": msg.id})
+            self._say("[%s] you -> %s (chat): %s"
+                      % (self.world.now(), npc.name, text))
+        out = {"sent": bool(known)}
+        if bounced:
+            out["bounced"] = bounced
+        return out
+
     def agent_say(self, npc_id, text, via="chat"):
-        """Deliver instantly; schedule the NPC's response via the latency rule."""
-        if npc_id not in self.world.npcs:
-            # LIVENESS: agent actions never kill the sim. NPC voices can
-            # hallucinate out-of-world people (a customer CTO, an email
-            # address) — messaging one simply doesn't deliver.
+        """Single-recipient compatibility wrapper (CLI/API/smoke): chat goes
+        through the group path; email through agent_email."""
+        if via == "email":
+            r = self.agent_email([npc_id], "message", text)
+        else:
+            r = self.agent_chat([npc_id], text)
+        if r.get("bounced") or not r.get("sent"):
             return {"error": "not delivered — %r is not in the company "
                              "directory" % npc_id}
-        self._advance_action_clock()
-        npc = self.world.npcs[npc_id]
-        msg = self.world.send_message("agent", npc_id, text, via=via)
-        npc.notify(self.world.clock, "%s (%s): %s"
-                   % (self.world.scenario.get("agent_name", "the PM"), via, text))
-        if via == "chat" and in_working_hours(self.world.clock):
-            # the tax is FELT, not just charged: the same 20 focus-minutes
-            # busy_by_assignee subtracts lands in the holder's experience, so
-            # testimony about it is honest ("these pings are killing my
-            # flow") and persona-colored — the human way a PM learns channel
-            # economics in-episode, without a word in any tool description.
-            npc.notify(self.world.clock,
-                       "(that ping just broke your concentration — it'll "
-                       "take you a good while to get back into deep work)")
-        if via == "email":
-            # email doesn't interrupt and isn't scheduled: it waits in the
-            # inbox for the recipient's next wakeup (the batch moment).
-            npc.unanswered_emails += 1
-            due = None
-        else:
-            due = npc.response_time(self.world.clock, via=via)
-            due = self.world.defer_for_meetings(npc_id, due, npc.rng)
-            self._schedule(due, "npc_respond", {"npc": npc_id, "message_id": msg.id})
-        self._say("[%s] you -> %s (%s): %s" % (self.world.now(), npc.name, via, text))
-        return due
+        return r
 
     def agent_email(self, npc_ids, subject, body):
         """One GROUP email: composed once (one action-minute regardless of

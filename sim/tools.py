@@ -77,13 +77,17 @@ def _advance(engine, minutes):
 
 TOOLS = [
     _tool("send_chat",
-          "Send a chat message to one coworker.",
+          "Send a chat message to one coworker (npc) or several (to) — a "
+          "group ping where everyone sees who else is on it.",
           {"npc": {"type": "string", "description": "coworker id"},
+           "to": {"type": "array", "items": {"type": "string"},
+                  "description": "several coworker ids (group ping)"},
            "text": {"type": "string"}},
-          ["npc", "text"],
+          ["text"],
           # no reply_due returned: WHEN people answer is theirs to know
-          lambda e, a: (lambda r: r if isinstance(r, dict) and "error" in r
-                        else {"sent": True})(e.agent_say(a["npc"], a["text"]))),
+          lambda e, a: e.agent_chat(a.get("to")
+                                    or ([a["npc"]] if a.get("npc") else []),
+                                    a["text"])),
 
     _tool("send_email",
           "Send an email to one or more coworkers.",
