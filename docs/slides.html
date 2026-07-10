@@ -50,6 +50,32 @@
   .band .tick span { display: block; margin-top: .6vh; white-space: nowrap; }
   .foot { font-size: 1.95vh; color: var(--dim); border-top: 1px solid var(--border);
           padding-top: 1.5vh; margin-top: 3vh; }
+  /* DES timeline (slide: how the world runs) */
+  .tl { position: relative; height: 34vh; margin: 1.5vh 0 1vh; }
+  .tl .rail { position: absolute; left: 0; right: 0; top: 50%; height: .45vh;
+              background: var(--border); border-radius: 999px; }
+  .tl .axis { position: absolute; right: 0; top: 44.5%; color: var(--dim); font-size: 1.8vh; }
+  .tl .lane { position: absolute; left: 0; font-size: 1.65vh; letter-spacing: .16em;
+              text-transform: uppercase; }
+  .tl .lane.you  { top: 0; color: var(--accent); }
+  .tl .lane.wrld { bottom: 0; color: var(--amber); }
+  .tl .tick { position: absolute; width: 10.5vw; display: flex; flex-direction: column;
+              align-items: center; gap: .55vh; text-align: center;
+              font-size: 1.78vh; line-height: 1.32; }
+  .tl .tick .t { color: var(--dim); font-size: 1.65vh; }
+  .tl .tick i { width: 1.5vh; height: 1.5vh; border-radius: 50%; flex: none;
+                font-style: normal; }
+  .tl .tick.you  { bottom: 50%; transform: translate(-50%, .95vh); justify-content: flex-end; }
+  .tl .tick.wrld { top: 50%; transform: translate(-50%, -.75vh); }
+  .tl .tick.you i  { background: var(--accent); }
+  .tl .tick.wrld i { background: var(--amber); }
+  .tl .tick.fin i  { background: var(--green); }
+  .tl .tick.ghost { opacity: .5; }
+  .tl .tick.ghost i { background: transparent; border: .28vh dashed var(--dim); }
+  .tl .adv { position: absolute; top: 46.8%; border-top: .4vh dashed var(--accent);
+             opacity: .65; }
+  .tl .cutx { position: absolute; top: 44.4%; color: var(--red); font-size: 2.5vh;
+              transform: translateX(-50%); }
   .flow { display: flex; align-items: stretch; gap: 1.2vw; margin: 1vh 0 3.5vh; }
   .flow .step { flex: 1; background: var(--card); border: 1px solid var(--border);
                 border-radius: 12px; padding: 2vh 1.4vw; text-align: center; }
@@ -103,53 +129,44 @@
   <b>seed</b> replays the week byte-for-byte. The scoring band is computed from this file <b>before any agent runs</b>.</p>
 </section>
 
-<!-- 1c · how the world runs -->
+<!-- 1c · how the world runs: DES timeline -->
 <section class="slide">
   <div class="kicker">1 · the world — how it runs</div>
-  <h2>One clock, one append-only log, every instant replayable</h2>
-  <div class="cols">
-    <div>
-      <div class="ex"><b class="accent">SYNC</b> — with your action
-your tool mutates the world at
-this instant (+1 sim-min), then
-drains any events now due.
-
-<b class="amber">ASYNC</b> — in the background
-a min-heap of (time, seq) events:
-replies, email batches, belief
-slips, arrivals, meetings. the
-clock only JUMPS to the next one.</div>
-    </div>
-    <div>
-      <div class="ex"><b class="green">STATE = fold(log)</b>
-the world is a pure function of an
-append-only event log. any past
-instant is rebuilt by replay —
-<b>LLM-free, instant, byte-identical</b>.
-
-<b class="violet">the determinism boundary</b>
-LLMs write only NPC/agent TEXT.
-rules decide every consequence:
-progress, skills, routing, score.
-draws keyed by (seed, id).</div>
-    </div>
+  <h2>One clock that only jumps — one append-only log</h2>
+  <div class="tl">
+    <div class="lane you">you — act at "now"</div>
+    <div class="lane wrld">world — async event heap</div>
+    <div class="rail"></div><div class="axis">sim time ▸</div>
+    <div class="adv" style="left:21%; width:20%"></div>
+    <div class="cutx" style="left:31%">✕</div>
+    <div class="tick you" style="left:7%"><span class="t">Mon 09:05</span>
+      <span><b>ping Sarah</b><br>costs +1 sim-min</span><i></i></div>
+    <div class="tick you" style="left:21%"><span class="t">Mon 09:06</span>
+      <span><b>advance 3 h</b><br>sleep till 12:06</span><i></i></div>
+    <div class="tick you ghost" style="left:41%"><span class="t">Mon 12:06</span>
+      <span>never reached</span><i></i></div>
+    <div class="tick you" style="left:62%"><span class="t">Tue 09:05</span>
+      <span><b>you call it: OAuth</b><br>api-core unblocked</span><i></i></div>
+    <div class="tick wrld" style="left:31%"><i></i><span class="t">Mon 09:42</span>
+      <span><b>Sarah replies</b><br>chat is push →<br><b class="red">woken early</b></span></div>
+    <div class="tick wrld" style="left:45.5%"><i></i><span class="t">Mon 11:30</span>
+      <span><b>email batch</b> — an arrival<br>lands on <b>the busiest</b></span></div>
+    <div class="tick wrld" style="left:57%"><i></i><span class="t">Tue 09:00</span>
+      <span>Sam: <b>"OAuth or email+pw?"</b><br>api-core <b class="red">STALLS</b></span></div>
+    <div class="tick wrld" style="left:72%"><i></i><span class="t">Tue 13:00</span>
+      <span><b>Sarah: 70% still left</b><br>the blocker surfaces</span></div>
+    <div class="tick wrld" style="left:84%"><i></i><span class="t">Wed 10:00</span>
+      <span><b>booked session fires</b><br>hands pool, transcript logs</span></div>
+    <div class="tick wrld fin" style="left:96%"><i></i><span class="t">Fri 17:00</span>
+      <span><b>horizon</b><br>grade the world</span></div>
   </div>
-  <p class="foot">Rules decide, the LLM narrates. A run reproduces exactly and the reward is a pure
-  function of the agent's actions — the two properties GRPO needs.</p>
-</section>
-
-<!-- 2 · world: the machine -->
-<section class="slide">
-  <div class="kicker">1 · the world</div>
-  <h2>Time jumps between events — nothing else exists</h2>
-  <div class="ex"><span class="c">Mon 09:05</span>  you ping Sarah                    <span class="c">← your action costs 1 sim-minute</span>
-<span class="c">Mon 09:06</span>  you skip ahead 3 hours…
-<span class="c">Mon 09:42</span>  …interrupted: Sarah replies        <span class="c">← her latency: a seeded 5–45 min draw</span>
-<span class="c">Mon 09:42</span>  the model thinks for 30 real seconds — <b>sim clock doesn't move</b>
-<span class="c">Tue 09:00</span>  overnight, the migration gained 0 hours: nobody works at night —
-           progress is <b>computed from the calendar</b>, no process ever "runs"</div>
-  <p class="cap">Every change is one line in a log — any past instant can be rebuilt, no LLM
-  needed. Nothing is polled: chats wake you, email arrives on its own schedule.</p>
+  <p class="cap">Spacing = <b>events, not minutes</b>: between ticks nothing exists — the clock jumps
+  heap-event to heap-event; nights add <b>+0 h</b> (progress is computed from the working calendar).
+  Model thinking time costs <b>zero</b> sim-minutes. Each tick appends one line to a log;
+  <span class="mono">state(t) = fold(log ≤ t)</span> — any instant rebuilds LLM-free, byte-identical.</p>
+  <p class="foot">LLMs write only the words people say; rules decide every consequence — progress, routing,
+  score (random draws keyed by seed). Exact replay + reward a pure function of the agent's actions:
+  the two properties GRPO needs.</p>
 </section>
 
 <!-- 3 · world: communication -->
@@ -230,9 +247,12 @@ meet  → 3 person-hours for
 path; Sarah alone misses Fri.
 
 2h working session, Sarah+Dave:
+<span class="c">rule: extra hands fade —
+1st &#215;1.0, 2nd &#215;0.6, 3rd &#215;0.36 …
+(coordination overhead, Brooks)</span>
   1st hand  Sarah  <b>1.0 &#215; 1.3</b> = 1.3  <span class="c">full weight &#215; her db skill</span>
-  2nd hand  Dave   <b>0.6 &#215; 1.0</b> = 0.6  <span class="c">weight 0.6 &#215; his 1.0 (no db)</span>
-  pooled = 1.3 + 0.6 = <b class="green">1.9&#215;</b>  <span class="c">(3rd hand would add 0.36&#215;…)</span>
+  2nd hand  Dave   <b>0.6 &#215; 1.0</b> = 0.6  <span class="c">fade 0.6 &#215; his 1.0 (no db)</span>
+  pooled = 1.3 + 0.6 = <b class="green">1.9&#215;</b>
   banked = 2h &#215; 1.9 = <b class="green">3.8h</b> at meeting-end → <b>ships Thu</b></div>
 
 <span class="c">chat/email move words, not work —
@@ -447,24 +467,51 @@ value ← <b>max</b> combined over all</div>
 <!-- 9b · complexity levers -->
 <section class="slide">
   <div class="kicker">4 · the rubrics — complexity levers</div>
-  <h2>Difficulty is a set of dials, each one physical</h2>
-  <table style="font-size:2.15vh">
-    <tr><th>lever</th><th>turning it up means</th><th>what gets harder</th></tr>
-    <tr><td><b>capacity pressure</b></td><td>more work-hours vs the team's week</td>
-        <td>slack disappears; every misstep costs a deliverable</td></tr>
-    <tr><td><b>default-owner wrongness</b></td><td>arrivals land on a <b>sub-optimal owner</b> (often the busiest)</td>
-        <td>reallocation goes from nice-to-have to the whole job</td></tr>
-    <tr><td><b>dependency chains</b></td><td>longer must-finish-before paths</td>
-        <td>one slip cascades down the critical path</td></tr>
-    <tr><td><b>arrival timing &amp; channel</b></td><td>later ambushes; email instead of chat</td>
-        <td>less reaction window; discovery lags your inbox</td></tr>
-    <tr><td><b>belief error &amp; confession time</b></td><td>Monday's picture more wrong, truth surfaces later</td>
-        <td>less time to re-plan once the truth lands</td></tr>
-    <tr><td><b>skill spread</b></td><td>hidden specialists diverge more</td>
-        <td>routing matters more; misrouting costs more</td></tr>
-    <tr><td><b>forced triage</b></td><td>total work &gt; team capacity</td>
-        <td>even perfect play must sacrifice — choosing what dies is the skill</td></tr>
-  </table>
+  <h2>Difficulty is seven dials — pull any axis, the week hardens there</h2>
+  <div class="cols" style="grid-template-columns: 1.15fr 1fr; align-items: center;">
+    <div>
+      <svg viewBox="0 0 720 440" style="width:100%; height:auto; display:block"
+           font-family="system-ui" font-size="17">
+        <g fill="none" stroke="rgba(255,255,255,.13)">
+          <circle cx="360" cy="220" r="50"/><circle cx="360" cy="220" r="100"/>
+          <circle cx="360" cy="220" r="150"/>
+          <path d="M360 220 L360 70 M360 220 L477.3 126.5 M360 220 L506.2 253.4
+                   M360 220 L425.1 355.2 M360 220 L294.9 355.2 M360 220 L213.8 253.4
+                   M360 220 L242.7 126.5"/>
+        </g>
+        <polygon points="360,85 459.7,140.5 462.4,243.4 408.8,321.4 307.9,328.1 257.6,243.4 248.6,131.2"
+                 fill="rgba(227,73,72,.16)" stroke="#e34948" stroke-width="2.5"/>
+        <polygon points="360,167.5 395.2,191.9 403.9,230 382.8,267.3 340.5,260.5 308.8,231.7 330.7,196.6"
+                 fill="rgba(47,211,154,.18)" stroke="#2fd39a" stroke-width="2.5"/>
+        <g fill="#a5a39b">
+          <text x="360" y="46" text-anchor="middle">capacity pressure</text>
+          <text x="490" y="112">default-owner wrongness</text>
+          <text x="522" y="260">dependency chains</text>
+          <text x="428" y="386">arrival timing &amp; channel</text>
+          <text x="292" y="386" text-anchor="end">belief error &amp; confession time</text>
+          <text x="198" y="260" text-anchor="end">skill spread</text>
+          <text x="230" y="112" text-anchor="end">forced triage</text>
+        </g>
+      </svg>
+      <p class="cap" style="margin-top:.4vh"><span style="color:var(--green)">■</span> an easy week
+        &nbsp;&nbsp;<span style="color:var(--red)">■</span> a hard week — same seven axes,
+        pulled further out. A generated instance <b>is</b> one such shape.</p>
+    </div>
+    <div class="ex" style="font-size:1.95vh; line-height:1.75"><b>capacity pressure</b> — slack disappears;
+  every misstep costs a deliverable
+<b>default-owner wrongness</b> — arrivals land
+  on the busiest; rearranging = the job
+<b>dependency chains</b> — one slip cascades
+  down the critical path
+<b>arrival timing &amp; channel</b> — later ambush,
+  buried in email; reaction window shrinks
+<b>belief error &amp; confession</b> — Monday's picture
+  more wrong, truth lands later
+<b>skill spread</b> — hidden specialists diverge;
+  misrouting costs more
+<b>forced triage</b> — work &gt; capacity;
+  choosing what dies is the skill</div>
+  </div>
   <p class="cap">Every lever is a number in a config file, so the band is <b>programmable</b>: a tuning
   loop <b>widens</b> it (more winnable) or <b>sharpens/spreads</b> it (which decisions it teaches) by editing
   one seed number and re-measuring — crunch → mobile → bigweek walked winnable 7 → 10 → 26 this way.
@@ -511,6 +558,45 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
 
     </div>
   </div>
+</section>
+
+<!-- 10d · scope / what's not modelled -->
+<section class="slide">
+  <div class="kicker">scope — built incrementally, on evidence</div>
+  <h2>What's deliberately <i>not</i> modelled (yet) — and why</h2>
+  <div class="cols">
+    <div>
+      <div class="ex"><b class="accent">PRINCIPLED EXCLUSIONS</b>
+<span class="c">(kept out by design — determinism &amp;
+ reward-hacking resistance)</span>
+
+• communication <b>content</b> is ungraded
+  <span class="c">a clear vs sloppy doc score the same;
+  words earn nothing — only outcomes do</span>
+• NPCs have <b>no free agency</b>
+  <span class="c">they don't refuse / negotiate / quit
+  off-script — behaviour is config-keyed,
+  else determinism &amp; replay break</span>
+• <b>no LLM</b> on the physics / scoring path</div>
+    </div>
+    <div>
+      <div class="ex"><b class="amber">ROADMAP</b> — next increments
+<span class="c">(each ships only once an ablation shows
+ it owns real band-share)</span>
+
+• <b>scope levers</b>: descope / split a task,
+  negotiate the deadline
+• <b>quality &amp; rework</b>: rushing seeds a
+  rework task — speed-vs-quality
+• <b>partial availability</b> → cross-project
+  &amp; multi-week horizons  <span class="c">(OOO = step 1)</span>
+• close the <b>generate→measure→adjust</b>
+  loop to hit a target difficulty tier</div>
+    </div>
+  </div>
+  <p class="cap">Built layer by layer, not 0→100: a mechanic is added only after it's <b>measured</b> to
+  move the reward — and kept honest when it doesn't (coordination/pooling is in, but the ablation
+  shows it's <i>situational</i>, not a headline lever). Knowing what's out is how you benchmark cleanly.</p>
 </section>
 
 <!-- 11 · close -->
