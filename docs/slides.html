@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PM Simulation Environment — slides</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0d0d0d; --card: #161616; --ink: #f2f1ec; --dim: #a5a39b;
+    --accent: #3987e5; --green: #2fd39a; --amber: #eda100; --red: #e34948;
+    --violet: #9085e9; --border: rgba(255,255,255,.12);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); overflow: hidden;
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .slide { position: absolute; inset: 0; display: none; padding: 7vh 8vw;
+           flex-direction: column; justify-content: center; }
+  .slide.on { display: flex; }
+  .kicker { font-size: 2.1vh; letter-spacing: .22em; text-transform: uppercase;
+            color: var(--accent); font-weight: 700; margin-bottom: 2.2vh; }
+  h1 { font-size: 7.2vh; line-height: 1.08; letter-spacing: -.01em; }
+  h2 { font-size: 5.2vh; line-height: 1.12; margin-bottom: 3.2vh; letter-spacing: -.01em; }
+  p, li { font-size: 2.7vh; line-height: 1.5; color: var(--ink); }
+  .sub { color: var(--dim); }
+  ul { padding-left: 3.2vh; display: grid; gap: 1.6vh; }
+  b { color: #fff; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4vw; align-items: start; }
+  table { border-collapse: collapse; width: 100%; font-size: 2.25vh; }
+  th { text-align: left; color: var(--dim); font-size: 1.8vh; text-transform: uppercase;
+       letter-spacing: .08em; padding: 1vh 1.2vh; border-bottom: 1px solid var(--dim); }
+  td { padding: 1.15vh 1.2vh; border-bottom: 1px solid var(--border); vertical-align: top; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace;
+                font-size: .92em; color: var(--green); }
+  .formula { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+             padding: 2.4vh 2.8vh; font-family: ui-monospace, Menlo, monospace;
+             font-size: 2.5vh; line-height: 1.7; color: var(--ink); white-space: pre; }
+  .pill { display: inline-block; border: 1px solid var(--border); border-radius: 999px;
+          padding: .5vh 1.6vh; font-size: 2vh; color: var(--dim); margin: 0 .8vh .8vh 0; }
+  .band { position: relative; height: 9vh; margin: 3vh 0; }
+  .band .rail { position: absolute; left: 0; right: 0; top: 50%; height: .6vh;
+                background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
+                border-radius: 999px; }
+  .band .tick { position: absolute; top: 0; text-align: center; transform: translateX(-50%);
+                font-size: 2vh; }
+  .band .tick i { display: block; width: .35vh; height: 9vh; background: var(--ink);
+                  margin: 0 auto; opacity: .8; font-style: normal; }
+  .band .tick span { display: block; margin-top: .6vh; white-space: nowrap; }
+  footer { position: fixed; bottom: 2.2vh; left: 0; right: 0; display: flex;
+           justify-content: space-between; padding: 0 3vw; color: var(--dim);
+           font-size: 1.8vh; }
+  .accent { color: var(--accent); } .green { color: var(--green); }
+  .amber { color: var(--amber); } .red { color: var(--red); } .violet { color: var(--violet); }
+</style>
+</head>
+<body>
+
+<!-- 1 · title -->
+<section class="slide on">
+  <div class="kicker">project presentation</div>
+  <h1>A Project Manager<br>Simulation Environment</h1>
+  <p style="margin-top:3.5vh" class="sub">A deterministic, discrete-event week at a SaaS company.
+  LLMs voice the coworkers but can never move the world — <b style="color:var(--ink)">rules decide,
+  LLM narrates</b> — and every task carries a computable score band
+  <span class="mono">[no-PM&nbsp;baseline,&nbsp;OPT]</span> so agents are graded purely on outcomes.</p>
+  <p style="margin-top:2.5vh"><span class="pill">world &amp; communication</span>
+     <span class="pill">belief updates</span>
+     <span class="pill">skills &amp; meeting swarms</span>
+     <span class="pill">rubrics</span></p>
+</section>
+
+<!-- 2 · world: the machine -->
+<section class="slide">
+  <div class="kicker">1 · world</div>
+  <h2>One clock, one log, three kinds of change</h2>
+  <div class="cols">
+    <ul>
+      <li><b>Synchronous</b> — agent tool calls mutate the world at that instant
+          (every action costs 1 sim-minute).</li>
+      <li><b>Asynchronous</b> — a min-heap of events: replies, wakeups, arrivals,
+          belief updates. Time <b>jumps</b>, never crawls; inference latency never
+          leaks into the sim.</li>
+      <li><b>Derived</b> — task progress is a pure function of
+          <span class="mono">(config, clock, log)</span>: work "accrues overnight"
+          with nothing running.</li>
+    </ul>
+    <ul>
+      <li><b>Event-sourced</b> — <span class="mono">state = fold(scenario, events)</span>;
+          replay rebuilds any instant with <b>zero LLM calls</b>.</li>
+      <li><b>Causal</b> — no undispatched event ever sits at/before the clock
+          (property-fuzzed after every action).</li>
+      <li><b>Push-only</b> — a DES has no polling: chat wakes the agent
+          mid-advance, email arrives on a batch grid, the board must be read.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 3 · world: communication -->
+<section class="slide">
+  <div class="kicker">1 · world — communication</div>
+  <h2>Channels are priced like real offices</h2>
+  <table>
+    <tr><th>channel</th><th>speed</th><th>cost</th><th>real-life claim</th></tr>
+    <tr><td><b class="accent">chat</b></td>
+        <td>reply in 5–45 min; wakes the PM instantly</td>
+        <td><b class="red">20 focus-min tax</b> on the receiver, <b>serialized</b></td>
+        <td>an interruption costs ~20 min of refocus; three pings = three broken flows</td></tr>
+    <tr><td><b class="green">email</b></td>
+        <td>read at the receiver's next batch (NPC wakeup / PM 30-min grid)</td>
+        <td>zero tax</td>
+        <td>async by social contract — nobody drops their editor for mail</td></tr>
+    <tr><td><b class="violet">meeting</b></td>
+        <td>zero-latency exchange, live room, verbatim minutes</td>
+        <td>blocks <b>every attendee's</b> calendar for the full slot</td>
+        <td>1 hour × 4 people = 4 person-hours — the most expensive artifact in a company</td></tr>
+  </table>
+  <p class="sub" style="margin-top:2.6vh">None of this is in any tool description.
+  Agents learn it from <b style="color:var(--ink)">evidence</b> (reply timestamps, slipping completions),
+  <b style="color:var(--ink)">testimony</b> (the tax is <i>felt</i> — people complain in persona), or
+  <b style="color:var(--ink)">reward</b> (noisy trajectories simply score lower).</p>
+</section>
+
+<!-- 4 · world: tasks -->
+<section class="slide">
+  <div class="kicker">1 · world — tasks</div>
+  <h2>Real work always has an owner</h2>
+  <div class="cols">
+    <ul>
+      <li>Arrivals land <b>pre-assigned to a default holder</b> — often the wrong
+          one (the swamped volunteer). The announcement carries
+          <span class="mono">(ticket: id, currently on X)</span>.</li>
+      <li>The PM's levers: <span class="mono">assign_task</span> (move it) and
+          <span class="mono">reprioritize</span> (reorder it — scheduling only,
+          scoring weight stays authored).</li>
+      <li><b>One owner per task.</b> Many hands = a <b>meeting</b>, never a
+          longer assignee list.</li>
+    </ul>
+    <ul>
+      <li>Scheduler: deterministic, <b>preemptive</b>, work-conserving — everyone
+          works their highest-priority ready task and switches the moment that
+          changes; paused work resumes where it stopped.</li>
+      <li><b>No retroactive credit</b> — work starts at
+          <span class="mono">max(arrival, assigned_at)</span>; acting early is
+          worth something because acting late costs something.</li>
+      <li>The do-nothing baseline is a <b>complete unmanaged org</b>: defaults
+          play out, badly. Score 0 = "added nothing beyond it."</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 5 · beliefs: three layers -->
+<section class="slide">
+  <div class="kicker">2 · belief updates</div>
+  <h2>Three layers of knowing</h2>
+  <table>
+    <tr><th>layer</th><th>who holds it</th><th>behavior</th></tr>
+    <tr><td><b class="red">truth</b></td><td>engine + evaluator only</td>
+        <td>the scheduler's reality — nobody in the sim reads it, not even the task's holder</td></tr>
+    <tr><td><b class="amber">belief(t)</b></td><td>each holder, about their own work</td>
+        <td>honest but possibly wrong; <b>matures on an authored schedule</b> — Sarah believes 70% on
+            Monday, <i>realizes</i> 55% on Tuesday, sometimes pings you proactively to confess</td></tr>
+    <tr><td><b class="green">tracker</b></td><td>everyone</td>
+        <td>the record — lags, inherits stale beliefs; auto-updates only on
+            <b>completions</b>, the one public reliable signal</td></tr>
+  </table>
+  <p class="sub" style="margin-top:2.6vh">Consequence: <b style="color:var(--ink)">the interrogation
+  hack is dead</b> — asking everyone on Monday collects honest <i>wrong</i> answers. Authored
+  <b style="color:var(--ink)">red herrings</b> (confident false org beliefs) price noise-resistance,
+  and every update is a deterministic scheduled event: zero LLM on any information path.</p>
+</section>
+
+<!-- 6 · beliefs: the week -->
+<section class="slide">
+  <div class="kicker">2 · belief updates — one task's week</div>
+  <h2>What the PM can know, and when</h2>
+  <div class="formula">Mon 09:05   tracker: "~70% done, on track"      belief: 70%   truth: 55%
+Tue 14:00   belief_update fires -> holder realizes 55%
+            "schema rework surfaced — ~18 focused hours left"  (proactive ping)
+Wed–Thu     asking again = testimony (persona-colored, still honest-but-wrong)
+Thu 16:30   task truly completes -> tracker flips to Done   ← the reliable signal
+            two completions ≈ a velocity estimate for that person</div>
+  <p class="sub" style="margin-top:2.6vh">The skill being measured isn't extracting truth —
+  there is none to extract — it's <b style="color:var(--ink)">running a process</b>: keep slack against
+  noisy estimates, react fast to confessions, calibrate people from observed completions.</p>
+</section>
+
+<!-- 7 · skills -->
+<section class="slide">
+  <div class="kicker">3 · skills</div>
+  <h2>Hidden specialists: speed is a latent</h2>
+  <div class="cols">
+    <div>
+      <div class="formula">npc:  sarah.skills = {db: 1.3}
+      dave.skills  = {auth: 1.3, ops: 1.2}
+task: tags = ["db"]
+
+rate(person, task)
+  = geomean of matching factors
+  = 1.3   ← specialist works 30% faster</div>
+    </div>
+    <ul>
+      <li><b>Frozen config, never a runtime LLM call</b> — same physics for every
+          rollout of a task (GRPO-safe), nothing promptable.</li>
+      <li><b>Hidden from the PM</b>: not on the board, not in tool results.
+          Learnable only from <i>how fast work actually completes</i> —
+          routing the db task to Sarah is discovered, not documented.</li>
+      <li>The OPT ceiling routes by skill too (fastest eligible worker,
+          clamped ≥1×), so the bound stays honest.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 8 · skills combine in meetings -->
+<section class="slide">
+  <div class="kicker">3 · skills — combined in meetings</div>
+  <h2>The swarm: meetings can move work, boundedly</h2>
+  <div class="cols">
+    <div>
+      <div class="formula">swarm_rate(task, attendees)
+  = Σ  contrib_i · wᵢ          sorted desc
+       w = 1, 0.6, 0.36, …     diminishing
+  capped at 2.5×               Brooks's law
+
+meeting on task T banks
+  deposit = rate × slot
+effort-minutes that LAND at meeting end</div>
+    </div>
+    <ul>
+      <li>A task has <b>one owner</b>; putting more people on it is a
+          <b>meeting</b> — a temporary, <i>costed</i> swarm.</li>
+      <li><b>Additive but diminishing</b>: the second helper adds 60% of their
+          rate, the third 36% — a war-room can ~double a bottleneck,
+          never explode it (pure parallelism would break the OPT ceiling).</li>
+      <li>The trade is real: the swarm's deposit vs <b>every attendee's blocked
+          calendar</b>. A good PM swarms the skill-matched people on the
+          critical path — and nothing else.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 9 · rubrics: the band -->
+<section class="slide">
+  <div class="kicker">4 · rubrics</div>
+  <h2>Every task carries its own scale</h2>
+  <div class="band">
+    <div class="rail"></div>
+    <div class="tick" style="left:6%"><i></i><span><b>&lt; 0</b> made things worse<br class="sub">(taxes, churn, busywork)</span></div>
+    <div class="tick" style="left:34%"><i></i><span><b>0</b> = no-PM baseline<br class="sub">defaults play out, unmanaged</span></div>
+    <div class="tick" style="left:92%"><i></i><span><b>1</b> = OPT_ideal<br class="sub">frictionless exhaustive optimum</span></div>
+  </div>
+  <ul>
+    <li>Both anchors are <b>pure functions of the config</b> — computable at authoring
+        time, stamped into every scenario file.</li>
+    <li><span class="mono">score = (agent − baseline) / (OPT − baseline)</span> makes
+        100 generated tasks commensurable; <span class="mono">odds = N/(1−N)</span>
+        re-expands the top end.</li>
+    <li>Band width is authored difficulty: it equals <b>how wrong the default
+        ownership is</b> — the generator tunes it, a gate rejects degenerate tasks.</li>
+  </ul>
+</section>
+
+<!-- 10 · rubrics: metrics -->
+<section class="slide">
+  <div class="kicker">4 · rubrics — the metrics</div>
+  <h2>Outcomes only. No checks, no keywords, no judge.</h2>
+  <div class="formula">COMPLETION  = Σ w · (progress + α·done)/(1+α)      did the work get done
+EFFICIENCY  = Σ w · done · (horizon − done_at)/span  how early it landed
+COMBINED    = (completion + γ·efficiency)/(1+γ)      the RL reward
+DONE-RATE   = W(shipped)/W(all)                      what fraction shipped
+FAIRNESS    = 1 − σ(hours worked / available)        team health, per person</div>
+  <p style="margin-top:2.6vh">Noise punishes itself through physics: interruptions and
+  meetings consume capacity → completions land later → the score drops.
+  Measured: a chatty do-nothing PM scores <b class="red">below zero</b>;
+  reassigning work off the piled-up volunteer scores <b class="green">+0.41 → +0.91</b>.</p>
+  <p class="sub" style="margin-top:1.6vh">Anti-hacking by construction: made-up tasks carry zero weight ·
+  relabeling priority changes scheduling only · the tracker is never the truth ·
+  stakeholders can't be labor · unfair asks are rejected at authoring.</p>
+</section>
+
+<!-- 11 · close -->
+<section class="slide">
+  <div class="kicker">the pipeline</div>
+  <h2>From one template to a graded curriculum</h2>
+  <p style="font-size:3.2vh; line-height:1.8" class="mono">
+    template ─→ <b class="accent">generate</b> (seeded physics remix)
+    ─→ <b class="amber">gate</b> (valid · fair · band tier)
+    ─→ <b class="violet">stamp</b> [baseline, OPT]
+    ─→ <b class="green">probe ladder</b> ─→ Pareto dashboard</p>
+  <ul style="margin-top:3vh">
+    <li>Difficulty is <b>measured, never asserted</b> — fingerprint knobs predict it,
+        model score-degradation confirms it.</li>
+    <li>Deterministic end to end: same seed + same actions = the same week,
+        byte for byte. 40 tests, ~0.5 s, zero LLM calls.</li>
+    <li>Every run replayable and re-gradeable forever — trajectory, transcript,
+        and scorecard are one click from the benchmark point.</li>
+  </ul>
+</section>
+
+<footer>
+  <span>project_manager_sim</span>
+  <span id="pos">1 / 11</span>
+  <span>← → to navigate</span>
+</footer>
+
+<script>
+"use strict";
+const slides = [...document.querySelectorAll(".slide")];
+let cur = 0;
+function show(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, j) => s.classList.toggle("on", j === cur));
+  document.getElementById("pos").textContent = (cur + 1) + " / " + slides.length;
+  location.hash = cur + 1;
+}
+addEventListener("keydown", e => {
+  if (["ArrowRight", " ", "PageDown"].includes(e.key)) show(cur + 1);
+  if (["ArrowLeft", "PageUp"].includes(e.key)) show(cur - 1);
+});
+addEventListener("click", e => show(cur + (e.clientX > innerWidth / 2 ? 1 : -1)));
+show(parseInt(location.hash.slice(1) || "1", 10) - 1);
+</script>
+</body>
+</html>
