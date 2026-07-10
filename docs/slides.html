@@ -513,33 +513,6 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
   </div>
 </section>
 
-<!-- 10c · failure modes avoided -->
-<section class="slide">
-  <div class="kicker">design integrity</div>
-  <h2>The failure modes it's built to avoid</h2>
-  <table style="font-size:2vh">
-    <tr><th>the trap</th><th>the naive version</th><th>how this env avoids it</th></tr>
-    <tr><td><b>reward hacking</b></td><td>an LLM judge / credit for activity</td>
-        <td>OUTCOMES only — talk scores nothing; agent-created tasks carry weight 0</td></tr>
-    <tr><td><b>gaming the ceiling</b></td><td>agent beats OPT → broken denominator</td>
-        <td>OPT is a cheap reference; &gt;1 = real coordination; reward is affine-invariant to it</td></tr>
-    <tr><td><b>stale scores</b></td><td>trust the cached scorecard</td>
-        <td>re-score from the immutable event log + a scoring-version stamp</td></tr>
-    <tr><td><b>non-determinism</b></td><td>an LLM on the physics / scoring path</td>
-        <td>rules decide, LLM narrates; draws keyed by (seed, id); replay byte-identical</td></tr>
-    <tr><td><b>one-bit tasks</b></td><td>assert the difficulty</td>
-        <td>MEASURE each decision's band-share by ablation; require it to spread</td></tr>
-    <tr><td><b>strawman baseline</b></td><td>"do nothing" = 0 by fiat</td>
-        <td>an honest no-PM org that self-organizes (default owners + fallback pickups)</td></tr>
-    <tr><td><b>unfair ambush</b></td><td>work that can't finish in time</td>
-        <td>completability gate: doable from the moment the PM could first know of it</td></tr>
-    <tr><td><b>prompt injection</b></td><td>NPC text steers the world</td>
-        <td>NPCs have NO write channel — they emit text, never mutations</td></tr>
-  </table>
-  <p class="cap">The through-line: <b>everything an agent could exploit is priced by physics, not
-  policed by a checker</b> — so there's nothing to game and nothing brittle to maintain.</p>
-</section>
-
 <!-- 11 · close -->
 <section class="slide">
   <div class="kicker">the pipeline</div>
@@ -569,7 +542,7 @@ $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model
 
 <footer>
   <span>project_manager_sim</span>
-  <span id="pos">1 / 18</span>
+  <span id="pos">1 / 17</span>
   <span>← → to navigate</span>
 </footer>
 
