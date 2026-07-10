@@ -46,6 +46,7 @@
                border-bottom: 1px solid var(--grid); font-size: 12px; color: var(--ink-2); }
   #scrub { flex: 1; accent-color: var(--c-agent); }
   #scrub-label { min-width: 180px; font-variant-numeric: tabular-nums; }
+  button.pmv.sel { border-color: var(--c-agent); color: var(--c-agent); font-weight: 600; }
   button.small { font-size: 12px; padding: 3px 10px; border: 1px solid var(--border);
                  border-radius: 6px; background: var(--surface-1); color: var(--ink-1); cursor: pointer; }
 
@@ -322,6 +323,10 @@
     </div>
     <div class="panel" style="margin-bottom:14px">
       <h3 id="pm-traj-head">Agent conversation</h3>
+      <div style="display:flex;gap:8px;margin:6px 0 10px">
+        <button class="small pmv sel" data-pmv="chat">OpenAI format</button>
+        <button class="small pmv" data-pmv="readable">Readable</button>
+      </div>
       <div id="pm-traj"></div>
     </div>
     <div class="panel">
@@ -1027,6 +1032,18 @@ function convCard(m) {
     <div class="conv-body">${esc(pretty(m.content))}</div></div>`;
 }
 
+let PM_VIEW = "chat";   // "chat" = OpenAI format · "readable" = action list
+document.addEventListener("click", ev => {
+  const b = ev.target.closest(".pmv");
+  if (!b) return;
+  PM_VIEW = b.dataset.pmv;
+  document.querySelectorAll(".pmv").forEach(x =>
+    x.classList.toggle("sel", x.dataset.pmv === PM_VIEW));
+  const el = $("pm-traj");
+  if (el) el.dataset.tkey = "";   // force a re-render in the new view
+  renderPmTraj();
+});
+
 function renderConversation(el, msgs) {
   $("pm-traj-head").textContent =
     `Agent conversation — ${msgs.length} messages (system / user / assistant / tool)`;
@@ -1045,11 +1062,15 @@ function renderPmTraj() {
   const el = $("pm-traj");
   if (!el) return;
   const rec = TRANSCRIPTS[transcriptKey()];
-  if (rec && rec.messages.length) { renderConversation(el, rec.messages); return; }
+  // two views over the same run: the exact conversation (OpenAI format) or
+  // the compact event-derived action list ("what went on", one line each)
+  if (PM_VIEW === "chat" && rec && rec.messages.length) {
+    renderConversation(el, rec.messages); return;
+  }
   el.dataset.tkey = "";
   $("pm-traj-head").textContent =
     "PM trajectory — every agent action, in order (dim rows = pushes the PM received)" +
-    (rec ? " (no agent transcript for this run — event-derived view)" : "");
+    (PM_VIEW === "chat" && rec ? " (no agent transcript for this run)" : "");
   const short = id => (actorName[id] || id || "?").split(" ")[0];
   const clip = s => esc(String(s).length > 110 ? String(s).slice(0, 110) + "…" : s);
   const rows = [];
