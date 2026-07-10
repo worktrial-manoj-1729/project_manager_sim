@@ -72,6 +72,19 @@ def add_work_minutes(t, minutes, busy=()):
 _PRIORITY_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
 
+def _work_order_key(t, creation_idx):
+    """How an assignee sorts their ready queue: urgent first, then priority,
+    then creation order. The PM can REORDER via `order_urgent` / `order_priority`
+    (set by the reprioritize tool) — these override the defaults for SCHEDULING
+    only. Scoring weight still comes from the authored `priority`, so the PM
+    reorders work but cannot relabel a task to mint value."""
+    urgent = t.get("order_urgent")
+    if urgent is None:
+        urgent = t.get("urgent")
+    prio = t.get("order_priority") or t.get("priority")
+    return (0 if urgent else 1, _PRIORITY_RANK.get(prio, 2), creation_idx)
+
+
 def _earliest(t, sim_start):
     """Work can't start before the task EXISTS (arrival) or before somebody
     actually HOLDS it (assigned_at, stamped by assignment mutations). Without
@@ -128,11 +141,10 @@ def compute_schedule(tasks, sim_start, busy_by_assignee=None):
         avail = [tid for tid in unfinished if ready(tid)]
         if avail:
             # urgent first, then priority, then creation order — people
-            # sort their own queue sensibly even with no PM in the world
-            tid = min(avail, key=lambda x: (0 if sched[x].get("urgent") else 1,
-                                            _PRIORITY_RANK.get(
-                                                sched[x].get("priority"), 2),
-                                            order[x]))
+            # sort their own queue sensibly even with no PM in the world;
+            # the PM's reprioritize overrides (order_*) apply here and
+            # ONLY here (scoring weight stays authored)
+            tid = min(avail, key=lambda x: _work_order_key(sched[x], order[x]))
             t = sched[tid]
             remaining = int(round(max(0, t["effort_hours"] - t.get("done_hours", 0)) * 60))
             end = add_work_minutes(t_now, remaining, busy_by_assignee.get(a, ()))

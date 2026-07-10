@@ -101,7 +101,7 @@ def run_scripted(engine):
 # LLM probe: Claude plays the PM
 # ---------------------------------------------------------------------------
 
-def agent_system_prompt(scenario, max_turns):
+def agent_system_prompt(scenario):
     roster = "\n".join("- %s: %s — %s" % (n["id"], n["name"], n["role"])
                        for n in scenario["npcs"])
     project = scenario.get("project", {})
@@ -138,89 +138,65 @@ def agent_system_prompt(scenario, max_turns):
         "- A chat INTERRUPTS the recipient and costs them focus time; email is "
         "asynchronous and cheaper. Batch your questions and don't ping the "
         "same person repeatedly — every interruption is capacity you spent.\n\n"
-        "You have a budget of about {turns} decision turns for the WHOLE "
-        "week — pace yourself: batch several tool calls per turn, don't "
-        "micro-poll the inbox, and make sure you still have turns left for "
-        "Wednesday-Friday (new work can land mid-week).\n\n"
-        "When nothing further is worth doing, advance time to the end of the "
-        "week."
+        "Pacing: there is no fixed action budget — TIME is the constraint. "
+        "Every action advances the clock, and the week ends Friday 17:00. "
+        "When there is nothing useful to do right now, advance_time (or "
+        "wait_for_reply) to let the week move — you will be WOKEN the moment "
+        "something new lands on you (a chat, an email, a meeting). New work "
+        "arrives mid-week, so stay on the clock all the way to Friday. Use "
+        "quiet stretches to advance, not to fill with chatter: talking does "
+        "not move the world — only add_task / assign_task / write_doc / "
+        "schedule_meeting change outcomes."
     ).format(agent=scenario.get("agent_name", "the PM"),
              company=scenario.get("company", "the company"),
              roster=roster, project=project.get("name", "(project)"),
-             prio=project.get("priority", "-"), turns=max_turns)
+             prio=project.get("priority", "-"))
 
 
-def run_llm(engine, max_turns, model=DEFAULT_AGENT_MODEL):
+SAFETY_TURNS = 200   # runaway guard ONLY (a PM that never advances time) —
+                     # NOT a budget the agent should ration. The real pacing
+                     # constraint is sim-time: the loop drives to Friday.
+
+
+def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
     client = engine.client
     horizon = _horizon(engine)
     tools = schemas()
-    system = agent_system_prompt(engine.world.scenario, max_turns)
+    system = agent_system_prompt(engine.world.scenario)
     messages = [{"role": "user", "content":
                  "It is %s. The week starts now — over to you."
                  % engine.world.now()}]
     turns = []
 
-    def wake_or_finish():
-        """The agent yielded (stopped calling tools). This is a DES: we do NOT
-        advance it past future work. Roll time forward INTERRUPTIBLY — the
-        moment a push lands on the PM (a chat ping, an email batch, a line in
-        a meeting they're in) control returns and we hand them that push.
-        Returns the waking notifications, or None if the week actually ended."""
-        engine.advance_until(horizon, interruptible=True)
-        woke = engine.drain_agent_push()
-        if engine.world.clock >= horizon and not woke:
-            return None
-        return woke
-
-    for turn in range(max_turns):
-        if engine.world.clock >= horizon:
-            break
+    def do_turn():
+        """One agent LLM call. Executes its tool calls (their push
+        notifications ride back in each tool_result). Returns True if the
+        agent acted, False if it emitted no tool calls (a yield)."""
         t0 = wall_now()
         try:
             response = client.messages.create(
-                model=model, max_tokens=8000,
-                system=system, tools=tools, messages=messages,
-                **_agent_thinking(model))
+                model=model, max_tokens=8000, system=system, tools=tools,
+                messages=messages, **_agent_thinking(model))
         except anthropic.APIError as e:
-            # LIVENESS: an agent-side API failure ends the agent's week
-            # gracefully — the run still advances to horizon and gets scored.
             print("agent LLM error (%s) — ending run gracefully" % type(e).__name__)
-            break
+            return None
         engine.world.store.append_llm({
             "wall_ts": wall_now(), "sim_t": engine.world.clock,
             "sim_t_fmt": engine.world.now(), "npc": "AGENT", "kind": "agent_turn",
-            "model": model,
-            "latency_ms": int((wall_now() - t0) * 1000),
+            "model": model, "latency_ms": int((wall_now() - t0) * 1000),
             "stop_reason": response.stop_reason,
             "usage": {"input_tokens": response.usage.input_tokens,
                       "output_tokens": response.usage.output_tokens},
             "response_text": "".join(getattr(b, "text", "") for b in response.content
                                      if b.type == "text"),
             "tool_calls": [{"name": b.name, "input": b.input}
-                           for b in response.content if b.type == "tool_use"],
-        })
-
+                           for b in response.content if b.type == "tool_use"]})
         tool_uses = [b for b in response.content if b.type == "tool_use"]
         if not tool_uses:
-            # The agent stopped acting. It does NOT get to skip the rest of the
-            # week: roll time forward interruptibly (§ push semantics). If a
-            # push wakes the PM before Friday, hand it back and re-engage;
-            # only a truly quiet run to horizon ends here.
-            woke = wake_or_finish()
-            if woke is None:
-                break
             safe = [b for b in response.content if b.type in ("text", "thinking")]
             if safe:
                 messages.append({"role": "assistant", "content": safe})
-            messages.append({"role": "user", "content":
-                             "It is %s — something just reached you while you "
-                             "were waiting:\n%s\nThe week is not over. Handle it "
-                             "with your tools (remember: only add_task/"
-                             "assign_task/etc. change outcomes — talking does "
-                             "not). When genuinely nothing is left, stop."
-                             % (engine.world.now(), json.dumps(woke, default=str))})
-            continue
-
+            return False
         messages.append({"role": "assistant", "content": response.content})
         results = []
         for tu in tool_uses:
@@ -233,12 +209,43 @@ def run_llm(engine, max_turns, model=DEFAULT_AGENT_MODEL):
             results.append({"type": "tool_result", "tool_use_id": tu.id,
                             "content": payload})
         messages.append({"role": "user", "content": results})
+        return True
 
+    def deliver_push(woke):
+        messages.append({"role": "user", "content":
+                         "It is %s — something reached you while you were "
+                         "waiting:\n%s\nThe week is not over. Handle it with "
+                         "your tools (remember: only add_task / assign_task / "
+                         "etc. change outcomes — talking does not). When "
+                         "genuinely nothing is left, stop."
+                         % (engine.world.now(), json.dumps(woke, default=str))})
+
+    # -- drive the whole week in ONE loop: act -> (on yield) roll time forward
+    # interruptibly -> a push wakes the PM -> act, until Friday. No turn
+    # budget: sim-time is the constraint. `max_turns` is only a runaway guard
+    # for a PM that acts forever without ever advancing the clock.
+    for _ in range(max_turns):
         if engine.world.clock >= horizon:
             break
+        acted = do_turn()
+        if acted is None:      # agent-side API failure — end gracefully
+            break
+        if acted:
+            continue
+        # the agent yielded (no tool calls): roll time forward interruptibly.
+        # advance_until returns either at Friday, or the instant a push lands.
+        engine.advance_until(horizon, interruptible=True)
+        woke = engine.drain_agent_push()
+        if engine.world.clock >= horizon:
+            break
+        if woke:               # a push woke the PM before Friday — hand it over
+            deliver_push(woke)
+    else:
+        print("harness: hit SAFETY_TURNS=%d before Friday — agent never "
+              "advanced the clock?" % max_turns)
 
     if engine.world.clock < horizon:
-        engine.advance_until(horizon, max_events=500)
+        engine.advance_until(horizon, max_events=1000)
     return turns
 
 
@@ -286,7 +293,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("scenario", nargs="?", default="scenarios/demo.json")
     parser.add_argument("--probe", choices=["scripted", "llm"], default="scripted")
-    parser.add_argument("--max-turns", type=int, default=60)
+    parser.add_argument("--max-turns", type=int, default=SAFETY_TURNS,
+                        help="runaway guard on agent turns (NOT a budget); the "
+                             "loop drives to Friday by sim-time")
     parser.add_argument("--model", default=DEFAULT_AGENT_MODEL)
     args = parser.parse_args()
 

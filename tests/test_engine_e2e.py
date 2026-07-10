@@ -103,6 +103,18 @@ class TestLiveness(unittest.TestCase):
         self.assertIn("error", r)
         self.assertEqual(len(eng.world.messages), n_msgs)  # nothing delivered
 
+    def test_reprioritize_tool(self):
+        eng = make_engine()
+        r, _ = unwrap(call_tool(eng, "reprioritize",
+                                {"task_id": "side", "priority": "P0"}))
+        self.assertEqual(r.get("order_priority"), "P0")
+        self.assertEqual(eng.world.find_task("side")["priority"], "P2")
+        r, _ = unwrap(call_tool(eng, "reprioritize",
+                                {"task_id": "side", "priority": "P9"}))
+        self.assertIn("error", r)
+        r, _ = unwrap(call_tool(eng, "reprioritize", {"task_id": "incident"}))
+        self.assertIn("error", r)  # unfiled ticket isn't on the board
+
     def test_stakeholders_take_no_tickets(self):
         eng = make_engine()
         r, _ = unwrap(call_tool(eng, "assign_task",

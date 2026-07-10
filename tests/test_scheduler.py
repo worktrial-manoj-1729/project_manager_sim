@@ -48,6 +48,36 @@ class TestOrdering(unittest.TestCase):
         self.assertGreaterEqual(v["b"]["projected_done"], v["a"]["projected_done"])
 
 
+class TestReprioritize(unittest.TestCase):
+    def test_order_override_changes_scheduling_only(self):
+        """The PM can reorder a queue (order_priority/order_urgent) but the
+        authored priority keeps the rubric weight — no value minting."""
+        tasks = [
+            {"id": "p1", "title": "p1", "assignees": ["bo"], "effort_hours": 4,
+             "priority": "P1", "arrival": START},
+            {"id": "p2", "title": "p2", "assignees": ["bo"], "effort_hours": 4,
+             "priority": "P2", "order_priority": "P0", "arrival": START},
+        ]
+        v = _view(tasks, START + 1)
+        self.assertLess(v["p2"]["projected_done"], v["p1"]["projected_done"])
+        self.assertEqual(v["p2"]["priority"], "P2")  # scoring weight untouched
+
+    def test_order_urgent_override(self):
+        tasks = [
+            {"id": "u", "title": "u", "assignees": ["bo"], "effort_hours": 4,
+             "priority": "P2", "urgent": True, "order_urgent": False,
+             "arrival": START},
+            {"id": "n", "title": "n", "assignees": ["bo"], "effort_hours": 4,
+             "priority": "P2", "arrival": START},
+        ]
+        v = _view(tasks, START + 1)  # de-urgented: creation order decides
+        self.assertLess(v["u"]["projected_done"], v["n"]["projected_done"])
+        tasks[0]["order_urgent"] = True
+        tasks[1]["order_urgent"] = False
+        v = _view(tasks, START + 1)
+        self.assertLess(v["u"]["projected_done"], v["n"]["projected_done"])
+
+
 class TestAssignedAt(unittest.TestCase):
     def test_no_retroactive_credit(self):
         """Regression: assignment used to be retroactive — a 14:05 pickup was

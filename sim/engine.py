@@ -247,6 +247,35 @@ class Engine:
         # scheduler fields stay hidden)
         return {"assigned": task_id, "to": npc_id, "title": task["title"]}
 
+    def agent_reprioritize(self, task_id, priority=None, urgent=None):
+        """Reorder a task in its holder's work queue. SCHEDULING only: the
+        authored `priority` keeps its rubric weight, so the PM can decide
+        what gets worked first but can never relabel a task to mint value."""
+        task = self.world.find_task(task_id)
+        if task is None or task.get("filed") is False:
+            return {"error": "no task %r on the tracker" % task_id}
+        if priority is not None and priority not in ("P0", "P1", "P2", "P3"):
+            return {"error": "priority must be P0..P3, got %r" % priority}
+        changes = {}
+        if priority is not None:
+            changes["order_priority"] = priority
+        if urgent is not None:
+            changes["order_urgent"] = bool(urgent)
+        if not changes:
+            return {"error": "nothing to change — pass priority and/or urgent"}
+        self._advance_action_clock()
+        self.world.update_task(task_id, changes, "agent")
+        for a in task.get("assignees", []):
+            if a in self.world.npcs:
+                self.world.npcs[a].notify(
+                    self.world.clock, "the PM re-prioritized '%s'%s%s"
+                    % (task["title"],
+                       " to %s" % priority if priority is not None else "",
+                       " (urgent)" if urgent else ""))
+        self._say("[%s] you reprioritized %s %s"
+                  % (self.world.now(), task_id, changes))
+        return {"task_id": task_id, **changes}
+
     def agent_update_note(self, task_id, note):
         """Correct the tracker's reported status (record vs truth hygiene)."""
         task = self.world.find_task(task_id)

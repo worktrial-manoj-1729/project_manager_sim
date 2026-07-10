@@ -122,21 +122,27 @@ class World:
     def busy_by_assignee(self):
         """Time that doesn't go to tasks, per person — all derived, replayable:
         - meetings consume their full block for every attendee
-        - each CHAT message received in working hours costs a refocus tax
-          (`costs.chat_interrupt_minutes`, default 20 min), and interruptions
-          SERIALIZE — three pings in three minutes are three full distractions,
-          not one. Email is exempt: it waits for the wakeup batch; that's its
-          advantage. Setting the tax to 0 makes chat free (an ablation knob).
-        """
+        - each CHAT message received by a WORKER in working hours costs a
+          refocus tax (`costs.chat_interrupt_minutes`, default 20 min), and
+          interruptions SERIALIZE — three pings in three minutes are three full
+          distractions, not one. Email is exempt: it waits for the wakeup
+          batch; that's its advantage. Setting the tax to 0 makes chat free.
+
+        The tax applies ONLY to workers (people with scored tasks): a
+        stakeholder you report to (worker:false) owns no work, so interrupting
+        them consumes no schedulable capacity — messaging the VP is free, and
+        the model says so rather than charging a tax it would then ignore."""
         from .sim_time import in_working_hours
         tax = self.scenario.get("costs", {}).get("chat_interrupt_minutes", 20)
+        workers = {n["id"] for n in self.scenario.get("npcs", [])
+                   if n.get("worker", True)}
         busy = {}
         for m in self.meetings:
             for a in m["attendees"]:
                 busy.setdefault(a, []).append((m["start"], m["end"]))
         last_end = {}
         for msg in self.messages:
-            if (msg.via == "chat" and msg.recipient != "agent" and tax
+            if (msg.via == "chat" and msg.recipient in workers and tax
                     and in_working_hours(msg.time)):
                 start = max(msg.time, last_end.get(msg.recipient, 0))
                 busy.setdefault(msg.recipient, []).append((start, start + tax))

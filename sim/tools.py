@@ -98,6 +98,16 @@ TOOLS = [
           ["task_id", "npc"],
           lambda e, a: e.agent_assign_task(a["task_id"], a["npc"])),
 
+    _tool("reprioritize",
+          "Change how a task ranks in its assignee's work queue: set a "
+          "working priority (P0..P3) and/or mark it urgent.",
+          {"task_id": {"type": "string"},
+           "priority": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+           "urgent": {"type": "boolean"}},
+          ["task_id"],
+          lambda e, a: e.agent_reprioritize(a["task_id"], a.get("priority"),
+                                            a.get("urgent"))),
+
     _tool("update_tracker_note",
           "Correct a task's reported status in the tracker (what others read).",
           {"task_id": {"type": "string"}, "note": {"type": "string"}},
