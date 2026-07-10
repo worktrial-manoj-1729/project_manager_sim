@@ -1,0 +1,10 @@
+{
+  "horizon": 6780,
+
+  "task_value": {
+    "alpha": 0.5,
+    "gamma": 0.5,
+    "priority_weights": { "P0": 8, "P1": 4, "P2": 2, "P3": 1 },
+    "why": "The ONLY scoring: two outcome metrics over AUTHORED tasks (agent-created tasks carry zero weight). COMPLETION = w*(progress + alpha*done)/(1+alpha) — did the work get done. EFFICIENCY = w*done*(horizon - done_at)/span — how early. Both are deltas over the null-agent baseline, normalized by the frictionless optimum (sim.optimal). Noise self-punishes through physics: meetings and chat interruptions consume capacity, completions land later, efficiency drops. No checks, no penalties, no keywords, no LLM judging — nothing for a policy to game except doing the work better."
+  }
+}

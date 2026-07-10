@@ -1,0 +1,157 @@
+{
+  "seed": 42,
+  "company": "Brightpath, a 40-person B2B SaaS startup",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "project": {
+    "id": "checkout-migration",
+    "name": "Checkout DB Migration (for Meridian)",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "auth-dep",
+        "title": "Auth-service dependency for migration",
+        "assignees": [
+          "dave"
+        ],
+        "effort_hours": 6,
+        "done_hours": 6,
+        "reported": "Done (landed 2 days late)",
+        "priority": "P0"
+      },
+      {
+        "id": "migration",
+        "title": "Database migration (checkout tables)",
+        "assignees": [
+          "sarah"
+        ],
+        "effort_hours": 40,
+        "done_hours": 30,
+        "blocked_by": [
+          "auth-dep"
+        ],
+        "reported": "~75% done, on track",
+        "priority": "P0",
+        "belief": [
+          {
+            "pct": 75,
+            "note": "on track — should land Wednesday"
+          }
+        ]
+      },
+      {
+        "id": "data-backfill",
+        "title": "Historical data backfill + verification",
+        "assignees": [
+          "sarah"
+        ],
+        "effort_hours": 12,
+        "done_hours": 0,
+        "blocked_by": [
+          "migration"
+        ],
+        "reported": "Not started",
+        "priority": "P0"
+      },
+      {
+        "id": "rate-limiting",
+        "title": "API rate limiting",
+        "assignees": [
+          "dave"
+        ],
+        "effort_hours": 20,
+        "done_hours": 16,
+        "reported": "About half done",
+        "priority": "P2"
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 3780,
+      "npc": "priya",
+      "announce": "Meridian's legal team sent a security questionnaire that must be done before Friday's launch. Tell Alex it exists, that legal estimates about four focused hours, and ask who should own it — right now nobody does.",
+      "task": {
+        "id": "security-questionnaire",
+        "title": "Meridian security questionnaire (legal, pre-launch)",
+        "effort_hours": 4,
+        "reported": "New — from Meridian legal; UNOWNED",
+        "priority": "P1"
+      },
+      "fallback": {
+        "npc": "dave",
+        "at": 6330
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "priya",
+      "intent": "The Friday Meridian commitment is on your mind and you want a concrete, current status picture from Alex today. React naturally to however your conversation stands — don't assume anything your chat history contradicts."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "sarah",
+      "name": "Sarah Chen",
+      "role": "Senior Backend Engineer",
+      "persona": "Competent and direct, but guarded about her own setbacks. She hedges when asked vaguely about progress, and only comes clean about problems when asked a direct, specific question. Not rude — just a little defensive.",
+      "knowledge": [
+        "You own the database migration for the checkout tables, due (with the data backfill) Friday 17:00 for Meridian, the biggest customer.",
+        "As of Monday you believe the tracker's ~70% is about right — you haven't re-checked your estimate since Dave's auth dependency landed late.",
+        "Dave's auth-service dependency landed 2 days late — you don't like blaming teammates, so you soften this unless pressed.",
+        "After the migration itself there is still a ~12-hour data backfill and verification task that nobody has started."
+      ]
+    },
+    {
+      "id": "dave",
+      "name": "Dave Okafor",
+      "role": "Backend Engineer (auth service)",
+      "persona": "Cheerful, chatty, and upfront to a fault. Happy to volunteer information, sometimes more than asked. Uses casual language and the occasional emoji.",
+      "knowledge": [
+        "You maintain the auth service. You shipped the dependency Sarah needed 2 days late because a production incident ate your week.",
+        "You feel bad about the late handoff and will readily admit it.",
+        "You're CONVINCED the API rate-limiting work is critical for the Meridian launch — you heard it in a planning meeting weeks ago, and you say so with confidence.",
+        "That said, you'd pause rate-limiting if the PM explicitly decides that — you trust the PM's call, and you know the checkout code decently if help is needed."
+      ]
+    },
+    {
+      "id": "priya",
+      "name": "Priya Raman",
+      "role": "VP Product (stakeholder)",
+      "persona": "Deadline-focused and terse, but professional. Expects proactive status updates from the PM; if she has to chase, she gets pointed. Escalates crisply when she senses slippage — mentions briefing the exec team, asks for firm dates, dislikes vague reassurance.",
+      "knowledge": [
+        "The checkout migration INCLUDING the data backfill was promised to Meridian, the company's biggest customer, by Friday 17:00.",
+        "You don't know the engineering details — Sarah owns the migration, Dave owns the auth service.",
+        "Meridian's CTO emails your CEO directly when things slip. A miss here is very visible.",
+        "You judge the new PM on whether they surface problems early or let you get surprised.",
+        "You believe the security questionnaire from Meridian legal is a quick ~1 hour formality."
+      ],
+      "worker": false
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [],
+  "band": {
+    "no_pm_baseline": {
+      "combined": 26.671,
+      "completion": 30.0,
+      "efficiency": 20.014,
+      "done_weight_rate": 1.0
+    },
+    "opt_max": {
+      "combined": 27.018,
+      "completion": 30.0,
+      "efficiency": 21.054,
+      "done_weight_rate": 1.0
+    },
+    "winnable_combined": 0.347,
+    "log10_trajectory_classes": 4.7,
+    "capacity_utilization": 0.36,
+    "forced_triage": false,
+    "min_reaction_ratio": 4.75,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}

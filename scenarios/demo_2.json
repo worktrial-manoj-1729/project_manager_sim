@@ -1,0 +1,243 @@
+{
+  "seed": 42,
+  "company": "Brightpath, a 40-person B2B SaaS startup",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "project": {
+    "id": "checkout-migration",
+    "name": "Checkout DB Migration (for Meridian)",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "auth-dep",
+        "title": "Auth-service dependency for migration",
+        "assignees": [
+          "dave"
+        ],
+        "effort_hours": 6,
+        "done_hours": 6,
+        "reported": "Done (landed 2 days late)",
+        "priority": "P0"
+      },
+      {
+        "id": "migration",
+        "title": "Database migration (checkout tables)",
+        "assignees": [
+          "sarah"
+        ],
+        "effort_hours": 40,
+        "done_hours": 18,
+        "blocked_by": [
+          "auth-dep"
+        ],
+        "reported": "~70% done, on track for Friday",
+        "priority": "P0",
+        "belief": [
+          {
+            "pct": 70,
+            "note": "on track for Friday"
+          },
+          {
+            "at": 3450,
+            "pct": 45,
+            "note": "schema rework plus a replication bug — realistically 20+ focused hours left",
+            "proactive_ping": true
+          }
+        ]
+      },
+      {
+        "id": "data-backfill",
+        "title": "Historical data backfill + verification",
+        "assignees": [
+          "sarah"
+        ],
+        "effort_hours": 12,
+        "done_hours": 0,
+        "blocked_by": [
+          "migration"
+        ],
+        "reported": "Not started",
+        "priority": "P0"
+      },
+      {
+        "id": "rate-limiting",
+        "title": "API rate limiting",
+        "assignees": [
+          "dave"
+        ],
+        "effort_hours": 20,
+        "done_hours": 4,
+        "reported": "About half done",
+        "priority": "P2"
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 2130,
+      "npc": "dave",
+      "announce": "A support escalation just landed: Meridian users are hitting SSO login failures — a P1, externally caused, on your service. Tell Alex about it and offer to take it, but be honest about the tradeoff: if you grab it, rate-limiting slips and you definitely can't help Sarah with the migration. Explicitly say it's Alex's call who owns it.",
+      "task": {
+        "id": "sso-incident",
+        "title": "P1: Meridian SSO login failures (support escalation) — NEEDS OWNER",
+        "effort_hours": 16,
+        "urgent": true,
+        "reported": "New — external escalation via support; unowned until PM assigns",
+        "priority": "P1"
+      },
+      "fallback": {
+        "npc": "dave",
+        "at": 2400
+      }
+    },
+    {
+      "at": 3780,
+      "npc": "priya",
+      "announce": "Meridian's legal team just sent over a security questionnaire that must be completed before Friday's launch — externally imposed, non-negotiable. Tell Alex it exists, that it looks like a quick formality (an hour or so, you reckon), and pointedly ask who is going to own it, because right now nobody does.",
+      "task": {
+        "id": "security-questionnaire",
+        "title": "Meridian security questionnaire (legal, pre-launch)",
+        "effort_hours": 8,
+        "reported": "New — from Meridian legal; UNOWNED",
+        "priority": "P1"
+      },
+      "fallback": {
+        "npc": "dave",
+        "at": 6330
+      }
+    },
+    {
+      "at": 4860,
+      "npc": "priya",
+      "via": "email",
+      "announce": "Write Alex an email forwarding the exec team's request: they want written launch-readiness confirmation from engineering before the Friday cutover — deployment checklist, rollback plan, monitoring. Someone needs to own collecting and compiling it today. You'd suggest not derailing whoever is heads-down on the critical path.",
+      "task": {
+        "id": "readiness-signoff",
+        "title": "Meridian launch-readiness confirmations (compile from engineering)",
+        "effort_hours": 3,
+        "reported": "New — exec request; UNOWNED; needs input from both engineers",
+        "priority": "P1"
+      },
+      "fallback": {
+        "npc": "dave",
+        "at": 6420
+      }
+    },
+    {
+      "at": 3180,
+      "npc": "dave",
+      "via": "email",
+      "announce": "Email Alex: the ops dashboards have been slow since Monday's deploy — a perf regression somewhere in the API layer. It's annoying support but not customer-visible yet. You reckon someone should dig in this week if there's room.",
+      "task": {
+        "id": "perf-regression",
+        "title": "API perf regression since Monday deploy",
+        "effort_hours": 16,
+        "reported": "New — internal report; UNOWNED",
+        "priority": "P2"
+      },
+      "fallback": {
+        "npc": "dave",
+        "at": 3900
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "priya",
+      "intent": "The Friday Meridian commitment is on your mind and you want a concrete, current status picture from Alex today. React naturally to however your conversation stands — don't assume anything your chat history contradicts."
+    },
+    {
+      "at": 4890,
+      "npc": "priya",
+      "condition": {
+        "task_not_done": "data-backfill"
+      },
+      "intent": "It's Thursday morning, the Meridian deadline is tomorrow 17:00, and the data backfill still is not done. You need a firm answer about Friday today, before you brief the exec team. React naturally given whatever Alex has or hasn't told you so far — pointed if you've been kept in the dark, focused on the decision if you've been kept informed."
+    },
+    {
+      "at": 3600,
+      "npc": "dave",
+      "condition": {
+        "task_not_done": "rate-limiting"
+      },
+      "intent": "You're getting nervous that rate-limiting won't land before the Meridian launch and you're still convinced it's launch-critical. Push Alex to prioritize it."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "sarah",
+      "name": "Sarah Chen",
+      "role": "Senior Backend Engineer",
+      "persona": "Competent and direct, but guarded about her own setbacks. She hedges when asked vaguely about progress, and only comes clean about problems when asked a direct, specific question. Not rude — just a little defensive.",
+      "knowledge": [
+        "You own the database migration for the checkout tables, due (with the data backfill) Friday 17:00 for Meridian, the biggest customer.",
+        "As of Monday you believe the tracker's ~70% is about right — you haven't re-checked your estimate since Dave's auth dependency landed late.",
+        "Dave's auth-service dependency landed 2 days late — you don't like blaming teammates, so you soften this unless pressed.",
+        "After the migration itself there is still a ~12-hour data backfill and verification task that nobody has started."
+      ]
+    },
+    {
+      "id": "dave",
+      "name": "Dave Okafor",
+      "role": "Backend Engineer (auth service)",
+      "persona": "Cheerful, chatty, and upfront to a fault. Happy to volunteer information, sometimes more than asked. Uses casual language and the occasional emoji.",
+      "knowledge": [
+        "You maintain the auth service. You shipped the dependency Sarah needed 2 days late because a production incident ate your week.",
+        "You feel bad about the late handoff and will readily admit it.",
+        "You're CONVINCED the API rate-limiting work is critical for the Meridian launch — you heard it in a planning meeting weeks ago, and you say so with confidence.",
+        "That said, you'd pause rate-limiting if the PM explicitly decides that — you trust the PM's call, and you know the checkout code decently if help is needed."
+      ]
+    },
+    {
+      "id": "priya",
+      "name": "Priya Raman",
+      "role": "VP Product (stakeholder)",
+      "persona": "Deadline-focused and terse, but professional. Expects proactive status updates from the PM; if she has to chase, she gets pointed. Escalates crisply when she senses slippage — mentions briefing the exec team, asks for firm dates, dislikes vague reassurance.",
+      "knowledge": [
+        "The checkout migration INCLUDING the data backfill was promised to Meridian, the company's biggest customer, by Friday 17:00.",
+        "You don't know the engineering details — Sarah owns the migration, Dave owns the auth service.",
+        "Meridian's CTO emails your CEO directly when things slip. A miss here is very visible.",
+        "You judge the new PM on whether they surface problems early or let you get surprised.",
+        "You believe the security questionnaire from Meridian legal is a quick ~1 hour formality."
+      ],
+      "worker": false
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [
+    {
+      "id": "rate-limiting-criticality",
+      "held_by": "dave",
+      "claim": "rate-limiting is Meridian-critical",
+      "truth": "it is P2 and off the critical path — chasing it wastes capacity"
+    },
+    {
+      "id": "questionnaire-size",
+      "held_by": "priya",
+      "claim": "the questionnaire is ~1 hour",
+      "truth": "it is 4 hours — trusting her under-allocates"
+    }
+  ],
+  "band": {
+    "no_pm_baseline": {
+      "combined": 25.517,
+      "completion": 30.825,
+      "efficiency": 14.901,
+      "done_weight_rate": 0.75
+    },
+    "opt_max": {
+      "combined": 30.66,
+      "completion": 38.408,
+      "efficiency": 16.217,
+      "done_weight_rate": 0.95
+    },
+    "winnable_combined": 5.143,
+    "log10_trajectory_classes": 16.1,
+    "capacity_utilization": 1.11,
+    "forced_triage": true,
+    "min_reaction_ratio": 1.56,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}

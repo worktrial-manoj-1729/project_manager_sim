@@ -1,0 +1,178 @@
+"""The agent-facing tool surface — single source of truth.
+
+Each tool = name + description + JSON schema + handler. The same registry
+drives the web UI / REST API today and becomes the Claude tool list for the
+agent harness (the evaluated PM agent) verbatim — Claude-tool-definition
+format on purpose.
+
+Handlers are all SYNCHRONOUS agent actions (see DESIGN.md): they mutate the
+world at the current instant (+1 sim-min cost) and may schedule async
+consequences. Time-advancing tools yield control to the queue.
+"""
+
+from .sim_time import fmt
+
+
+def _tool(name, description, properties, required, handler):
+    return {
+        "name": name,
+        "description": description,
+        "input_schema": {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+        },
+        "handler": handler,
+    }
+
+
+def _view_tasks(engine, args):
+    # THE TRACKER, not the truth: structure + recorded notes + announced
+    # completions. True progress is earned by asking people (their beliefs)
+    # and observing completions — never read off a board.
+    return {"now": engine.world.now(), "tasks": engine.world.tracker_view()}
+
+
+def _view_inbox(engine, args):
+    # scrollback of everything DELIVERED so far: all chat, plus emails whose
+    # batch-delivery event has fired. An email in flight (sent, not yet
+    # delivered) is invisible — in a DES nothing reaches you except by event.
+    delivered = {e["msg_id"] for e in engine.world.log
+                 if e["kind"] == "email_delivered"}
+    msgs = [m for m in engine.world.agent_inbox()
+            if m.via == "chat" or m.id in delivered]
+    return [{"time": fmt(m.time), "from": m.sender, "via": m.via, "text": m.text}
+            for m in msgs[-int(args.get("limit", 20)):]]
+
+
+def _advance(engine, minutes):
+    # PM sleep semantics: push-class signals interrupt the advance (control
+    # comes back at the interruption instant); board broadcasts never do.
+    target = engine.world.clock + minutes
+    fired = engine.advance_until(target, interruptible=True)
+    out = {"fired": fired, "now": engine.world.now()}
+    if engine.world.clock < target:
+        out["interrupted"] = True
+    return out
+
+
+TOOLS = [
+    _tool("send_chat",
+          "Send a chat message to one coworker.",
+          {"npc": {"type": "string", "description": "coworker id"},
+           "text": {"type": "string"}},
+          ["npc", "text"],
+          # no reply_due returned: WHEN people answer is theirs to know
+          lambda e, a: (lambda r: r if isinstance(r, dict) and "error" in r
+                        else {"sent": True})(e.agent_say(a["npc"], a["text"]))),
+
+    _tool("send_email",
+          "Send an email to one or more coworkers.",
+          {"to": {"type": "array", "items": {"type": "string"}},
+           "subject": {"type": "string"},
+           "body": {"type": "string"}},
+          ["to", "subject", "body"],
+          lambda e, a: e.agent_email(a["to"], a["subject"], a["body"])),
+
+    _tool("add_task",
+          "Add a task to the project board. Pass id if you're filing a ticket "
+          "someone referenced. With assignee+effort_hours it gets scheduled; "
+          "otherwise it's a tracking item.",
+          {"title": {"type": "string"},
+           "id": {"type": "string",
+                  "description": "ticket reference id, if one was mentioned"},
+           "assignee": {"type": "string"},
+           "effort_hours": {"type": "number"}},
+          ["title"],
+          lambda e, a: e.agent_add_task(
+              dict({"id": (a.get("id") or
+                           a["title"].lower().replace(" ", "-")[:40]),
+                    "title": a["title"]},
+                   **({"assignees": [a["assignee"]]} if a.get("assignee") else {}),
+                   **({"effort_hours": a["effort_hours"]}
+                      if a.get("effort_hours") else {})))),
+
+    _tool("assign_task",
+          "Assign or reassign a task to a coworker.",
+          {"task_id": {"type": "string"}, "npc": {"type": "string"}},
+          ["task_id", "npc"],
+          lambda e, a: e.agent_assign_task(a["task_id"], a["npc"])),
+
+    _tool("update_tracker_note",
+          "Correct a task's reported status in the tracker (what others read).",
+          {"task_id": {"type": "string"}, "note": {"type": "string"}},
+          ["task_id", "note"],
+          lambda e, a: e.agent_update_note(a["task_id"], a["note"])),
+
+    _tool("schedule_meeting",
+          "Book a meeting at a future time. Include 'agent' in attendees to "
+          "attend yourself. A transcript is kept.",
+          {"attendees": {"type": "array", "items": {"type": "string"}},
+           "start_in_minutes": {"type": "integer"},
+           "duration_minutes": {"type": "integer"},
+           "topic": {"type": "string"},
+           "agenda": {"type": "string"}},
+          ["attendees", "start_in_minutes", "duration_minutes", "topic"],
+          lambda e, a: e.agent_schedule_meeting(
+              a["attendees"], e.world.clock + int(a["start_in_minutes"]),
+              int(a["duration_minutes"]), a["topic"], a.get("agenda", ""))),
+
+    _tool("talk_in_meeting",
+          "Speak in the meeting you are attending right now (only works while "
+          "the clock is inside a meeting you attend).",
+          {"text": {"type": "string"}},
+          ["text"],
+          lambda e, a: e.agent_talk_in_meeting(a["text"])),
+
+    _tool("write_doc",
+          "Write a document and share it with coworkers — its content enters "
+          "their context (e.g. a status summary, a plan, a decision record).",
+          {"title": {"type": "string"},
+           "content": {"type": "string"},
+           "share_with": {"type": "array", "items": {"type": "string"}}},
+          ["title", "content", "share_with"],
+          lambda e, a: e.agent_write_doc(a["title"], a["content"], a["share_with"])),
+
+    _tool("view_tasks",
+          "Read the task tracker: assignments, dependencies, priorities, "
+          "recorded status notes, completions.",
+          {}, [], _view_tasks),
+
+    _tool("view_inbox",
+          "Read recent messages you've received.",
+          {"limit": {"type": "integer"}}, [], _view_inbox),
+
+    _tool("advance_time",
+          "Let simulated time pass (you do nothing for N minutes); scheduled "
+          "events fire along the way. Some things happening around you can "
+          "interrupt you before the time is up.",
+          {"minutes": {"type": "integer"}}, ["minutes"],
+          lambda e, a: _advance(e, int(a["minutes"]))),
+
+    _tool("wait_for_reply",
+          "Advance time until the next chat message for you arrives.",
+          {}, [],
+          lambda e, a: {"replied": e.run_until_reply() is not None,
+                        "now": e.world.now()}),
+]
+
+BY_NAME = {t["name"]: t for t in TOOLS}
+
+
+def schemas():
+    """Claude-ready tool definitions (registry minus handlers)."""
+    return [{k: t[k] for k in ("name", "description", "input_schema")}
+            for t in TOOLS]
+
+
+def call_tool(engine, name, args):
+    if name not in BY_NAME:
+        return {"error": "unknown tool %r" % name}
+    result = BY_NAME[name]["handler"](engine, args or {})
+    # PUSH delivery (sim/signals.py): whatever landed on the PM unasked since
+    # the last tool call rides along with this result — chat interrupts you.
+    # Email never appears here: it waits in the inbox for check_email.
+    new = engine.drain_agent_push()
+    if new:
+        return {"result": result, "notifications": new}
+    return result
