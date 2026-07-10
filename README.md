@@ -94,23 +94,6 @@ cp .env.example .env   # fill in ANTHROPIC_API_KEY
 Names are deliberately neutral — hardness is *determined* by measured score
 degradation, never asserted by a label.
 
-## First ladder results (2026-07-09)
-
-| position | demo | demo_2 |
-|---|---|---|
-| oracle (best feasible policy) | 1.000 | 1.000 |
-| scripted mechanical PM | 0.889 | — |
-| claude-sonnet-5 | −0.153 | −0.048 |
-| claude-haiku-4-5 | −0.180 | −0.073 |
-| no-PM baseline | 0.000 | 0.000 |
-
-Capability ordering is monotone, but zero-shot frontier models land **below
-baseline**: they overcommunicate (17–22 chats, zero emails, hours of focus
-tax) and under-execute (file tickets but don't assign them; the two
-Friday-panic P1s die exactly as they would with no PM). The environment
-prices activity-without-decisions as the drag it is — which is precisely
-the in-weights behavior a training loop on this reward would fix.
-
 ## Invariants (the short version of DESIGN.md)
 
 1. **LLMs produce text only** — no mutation channel, no physics, no scoring.
