@@ -1,547 +1,495 @@
-# Design: systems, state, and sim-time flow
+# Design: systems, semantics, and scoring
 
-This document pins down the semantics the problem statement asks to be legible:
-*what advances synchronously with an agent action, what advances asynchronously
-in the background, how state is owned and mutated, and how time flows.*
+A simulated week at a SaaS company, built as an evaluation and RL-training
+environment for PM agents. This document pins down the semantics the problem
+statement asks to be legible — what advances synchronously with an agent
+action, what advances asynchronously in the background, how state is owned
+and mutated, how time flows — and the scoring/authoring machinery built on
+top. Earlier design iterations live in git history, not here.
 
-## 1. The three classes of state change
+1.  [The model in one paragraph](#1-the-model-in-one-paragraph)
+2.  [State and time](#2-state-and-time)
+3.  [Causality and liveness invariants](#3-causality-and-liveness-invariants)
+4.  [The event queue](#4-the-event-queue)
+5.  [Channels: delivery and friction](#5-channels-delivery-and-friction)
+6.  [Work: tasks, the scheduler, filing, the org fallback](#6-work-tasks-the-scheduler-filing-the-org-fallback)
+7.  [NPCs: pure appended-context agents](#7-npcs-pure-appended-context-agents)
+8.  [Epistemics: three layers of knowing](#8-epistemics-three-layers-of-knowing)
+9.  [The determinism boundary](#9-the-determinism-boundary)
+10. [Evaluation: the band](#10-evaluation-the-band)
+11. [Task authoring and difficulty](#11-task-authoring-and-difficulty)
+12. [The harness](#12-the-harness)
+13. [Observability](#13-observability)
+14. [Tests](#14-tests)
 
-Everything that happens in the sim falls into exactly one of three classes:
+## 1. The model in one paragraph
+
+The world is a discrete-event simulation: a min-heap of `(sim_time, seq)`
+events, a single monotonic clock, and an append-only event log from which
+any past state is a pure fold. LLMs voice the coworkers but can never mutate
+state — **rules decide, LLM narrates**. Every task instance carries a
+deterministically computable band **[no-PM baseline, OPT_ideal]**: the floor
+is an honest baseline in which the org self-organizes without a PM, the
+ceiling is the frictionless optimum from exhaustive search, and the agent's
+score is its normalized position in that band (0 = added nothing a
+functioning unmanaged team wouldn't produce; 1 = perfect coordination;
+negative = made things worse). Everything an agent can exploit is priced by
+physics, not policed by checks.
+
+## 2. State and time
+
+### The three classes of state change
 
 | Class | Examples | When it executes | Clock behavior |
 |---|---|---|---|
-| **Synchronous** (agent-caused) | `say`; later: edit task, book meeting | Immediately, inside the agent's call frame | `clock += 1` (fixed action cost); the world mutates *at that instant* |
-| **Asynchronous** (queue-driven) | NPC replies, heartbeats, scenario beats; later: meeting start/end | Only when the agent yields time (`wait`/`run`) and the heap pops | Clock **jumps** to `event.time`; between pops, nothing executes |
-| **Derived** (analytic) | Task progress, availability, projected completion dates | **Never** — pure functions of `(scenario config, clock, logged mutations)` | No events at all; evaluating at a later clock simply yields a later value |
+| **Synchronous** (agent-caused) | send a message, file/assign/reprioritize a task, book a meeting | immediately, inside the agent's call frame | `clock += 1` (fixed action cost); the world mutates *at that instant* |
+| **Asynchronous** (queue-driven) | NPC replies, wakeups, beats, arrivals, org pickups, email deliveries, belief updates, meeting start/end | only when time rolls forward and the heap pops | clock **jumps** to `event.time`; between pops, nothing executes |
+| **Derived** (analytic) | task progress, projections, busy intervals, utilization | **never** — pure functions of `(config, clock, logged mutations)` | no events at all; evaluating at a later clock simply yields a later value |
 
-The **derived** class is the load-bearing trick. Task hours "accrue overnight"
-without anything running overnight: progress is
+The derived class is the load-bearing trick: task hours "accrue overnight"
+without anything running overnight, because progress is computed on demand
+from the work calendar (Mon–Fri 09:00–17:30, one task at a time per person).
+The async event set stays tiny, and rewind/replay get derived state for free.
 
-```
-progress(t) = done_hours + work_minutes_between(task_start, min(t, done_at)) / 60
-```
+### The two mutation frames and event sourcing
 
-computed on demand from the work calendar (Mon–Fri 09:00–17:30, one task at a
-time per assignee, blocked tasks accrue nothing). Because nothing executes,
-there is no sync/async question to answer for it, the async event set stays
-tiny, and rewind/replay get it for free — ask for the task board at any past
-time and the same function answers.
+World state is owned by one `World` object and mutates in exactly two stack
+frames: agent tool handlers (synchronous) and `Engine._dispatch(event)`
+(asynchronous). Both funnel through `world.record(...)`, which appends to
+the log and flushes to `runs/<id>/events.jsonl`. Therefore:
 
-## 2. The two mutation frames
+- `state = fold(scenario, events)` — the log is the complete history.
+- Replay (`sim/replay.py`) reconstructs any past state with **zero LLM
+  calls**: the only sampled thing (NPC text) is captured in the log.
+- The UI's rewind slider is "render the fold of a log prefix."
+- Runs are self-contained forever: `scenario.json`, `rubric.json`,
+  `events.jsonl`, `llm.jsonl`, `meta.json`, `scorecard.json`.
 
-World state is owned by a single `World` object and mutates in **exactly two
-stack frames**:
+### The two places time advances
 
-1. `Engine.agent_say(...)` — and future agent actions (synchronous class)
-2. `Engine._dispatch(event)` — the queue pop handler (asynchronous class)
+1. **Agent action cost**: +1 sim-minute per tool call (typing and deciding
+   take time; you cannot do 500 things at 09:00:00).
+2. **Queue pop**: `clock = event.time` — time jumps, never crawls.
 
-Both funnel every mutation through `world.record(...)`, which appends to the
-in-memory log **and** flushes to `runs/<id>/events.jsonl`. Consequences:
+Wall-clock never leaks in: when an `npc_respond` pops, the LLM call happens
+*inside that frozen instant* — Sarah replies "at 09:42" whether inference
+took 2 or 30 real seconds. `sim_time.wall_now()` is the single permitted
+system-clock call site in the codebase, for telemetry only.
 
-- The log **is** the complete mutation history: `state = fold(scenario, events)`.
-- Replay (`sim/replay.py`) reconstructs any past state with zero LLM calls,
-  because the only nondeterminism (LLM reply text) is captured in the log.
-- The UI's rewind slider is just "render the fold of a log prefix."
+The agent owns time. There is no background thread: `advance_time` and
+`wait_for_reply` are the yield primitives, and waiting is a real PM decision
+the physics grades (beats, arrivals, escalations fire *during* the jump;
+evaluation happens at a fixed horizon, so skipping time forfeits agency
+rather than dodging judgment). The operator's `advance_until(target)` fires
+everything up to the target then jumps — nights and weekends included — so
+a full 7-day run is one call.
 
-## 3. The two places time advances
+## 3. Causality and liveness invariants
 
-1. **Agent action cost**: `clock += 1` sim-minute per action. Prevents "do 500
-   things at 09:00:00" and makes agent activity occupy real (sim) time.
-2. **Queue pop**: `clock = event.time`. Discrete-event style — time jumps to
-   the next scheduled thing, never crawls.
+Enforced in code and by the property test suite (`tests/test_des_properties.py`,
+seeded fuzzing with invariants asserted after every action):
 
-Nothing else moves the clock. In particular, **wall-clock never leaks in**:
-when an `npc_respond` event pops, the LLM call happens *inside that frozen
-instant*. Sarah "replies at 09:42" whether inference took 2 or 30 real seconds.
-The agent can think indefinitely between actions; the world waits.
+1. **100% causal clock.** *No undispatched event exists at or before the
+   clock, at any instant the agent observes.* Action-cost advances drain
+   everything that became due; interruptible advances and `wait_for_reply`
+   drain all co-temporal events before returning control (the fuzzer found
+   the one-minute hole where a wake handed control back with a same-minute
+   event still pending).
+2. **Monotonic clock by construction.** One mutation point
+   (`World.advance_clock_to`) that raises on any backwards move.
+3. **The heap never starves.** Every `npc_wakeup` reschedules itself
+   strictly in the future; scenarios must have ≥1 NPC (validated). An
+   emptied heap still cannot deadlock: advancing jumps the void.
+4. **No agent action can kill the sim.** Unknown chat recipients error
+   in-fiction; unknown email addresses bounce (`{"bounced": [...]}`) — NPC
+   voices can hallucinate out-of-world contacts, and messaging one simply
+   doesn't deliver. Every fuzzed nonsense call returns an error dict, never
+   an exception.
+5. **LLM failures never stall the world.** NPC-brain exceptions degrade to
+   placeholder text; agent-side API failures end the agent's week
+   gracefully — the run still advances to horizon and is scored.
+6. **Waiting is bounded.** `wait_for_reply` gives up after ~1.5 workdays
+   rather than silently consuming the week.
+7. **Advance granularity is irrelevant.** One jump to Friday and a thousand
+   7-minute hops produce the identical world (property-tested).
 
-## 4. Control flow: who advances time
+## 4. The event queue
 
-The agent (or the operator driving it) **owns** time advancement. The sim never
-advances on its own — there is no background thread, no timer. `wait` pops one
-event; `run` pops until a message for the agent arrives. This is what makes the
-loop testable: a scripted sequence of agent actions produces a deterministic
-event timeline (seeded per-NPC RNGs, seq-numbered heap ties).
+| Kind | Scheduled by | On fire |
+|---|---|---|
+| `npc_respond` | chat latency rule at delivery (seeded per-NPC RNG, 5–45 min in-hours, deferred past meetings) | one LLM call → reply |
+| `npc_wakeup` | self-rescheduling heartbeat (~90–150 min, working hours) | answers the email batch; reschedules itself |
+| `email_delivery` | sending email to the PM | the batched push: delivers to the PM at the next `email_batch_minutes` grid tick (default 30) |
+| `task_arrival` | scenario `task_arrivals[]` | creates the *need* (truth, unfiled) + the announcement message (chat or email) carrying a rules-appended `(ticket: id)` |
+| `org_pickup` | each arrival's authored `fallback {npc, at}` | if still unowned: the volunteer takes it (assigned, filed, tracker-noted, `source: org`) |
+| `belief_update` | authored `belief[]` schedules on tasks | corrects the holder's honest picture; optional proactive confession ping |
+| `beat` | scenario `beats[]` | deterministic IF-chain over world truth picks an arm; the LLM only voices the chosen intent |
+| `meeting_start` / `meeting_end` / `room_turn` | `schedule_meeting` | live rooms: speak-or-PASS NPC turns, verbatim minutes broadcast at end |
 
-## 5. Event kinds (current)
+Beats and arrivals are how authored pressure lives in the same queue as
+organic behavior: a scenario is data (personas + tasks + beats + arrivals +
+fallbacks + seed), not code.
 
-| Kind | Class | Scheduled by | On fire |
+## 5. Channels: delivery and friction
+
+### Everything is push, because this is a DES
+
+A human PM "always refreshing email" is a background process; the agent has
+no background thread, and in a DES nothing happens except by an event
+popping. So there is **no poll tool anywhere**: push-class signals ride
+along with every tool result (`notifications`), and a *person* signal — a
+chat ping, a delivered email batch, someone speaking in your meeting —
+**interrupts `advance_time` early**, handing control back at that instant.
+Board broadcasts (completions) are delivered but never break sleep: only
+people and mail wake you. `view_inbox` is scrollback of what has been
+delivered; an email in flight is invisible.
+
+Delivery semantics are one static table (`sim/signals.py`); `World.record`
+stamps every logged signal with its `delivery`, so runs are self-describing:
+
+| Signal | Sender | Recipient | Physics |
 |---|---|---|---|
-| `npc_respond` | async | latency rule at message delivery (seeded RNG + working hours) | one LLM call → reply message |
-| `npc_wakeup` | async | self-rescheduling heartbeat (~2h, working hours only) | reschedules itself; later: initiative hook |
-| `beat` | async | scenario config (`beats[]`) | condition = deterministic world-state IF (task done? — existence checks, never keywords) deciding *whether/what substance* fires; **intent = motivation, never phrasing and never unverified facts**. An intent may assert only facts the condition just verified or the NPC's injected views contain; the LLM supplies human behavior from persona + visible history. Engine-if and NPC-eyes read the same fold → narration can't contradict the decision. |
-| `task_arrival` | async | scenario config (`task_arrivals[]`) — OOD tasks caused by externalities | `task_added` mutation; optionally an NPC announces it (LLM ping) |
+| chat | push | **push** | instant; interrupts — NPC pays the serialized focus tax; the PM is woken mid-advance |
+| email | push | **push (batched)** | delivered by event on the recipient's cadence: NPC wakeups / the PM's batch grid. Delayed, zero tax |
+| meeting invite / room line / minutes / doc share | push | push | calendar, live room, broadcast at end, shared stream |
+| task added to board | push | **pull** | the board shows only *filed* tasks; anyone must check it |
+| board edit | push | pull | exception: an assignment also notifies the assignee |
+| completion | push (auto) | push | the one public reliable broadcast; never wakes |
+| holder belief | — (pull) | — | surfaced only when asked, or at an authored confession ping |
 
-Beats and task arrivals are how **authored pressure and externality** live in
-the same queue as organic behavior: the scenario file is data (personas +
-tasks + beats + arrivals + seed), not code, which is how this scales to many
-scenarios without prompt spaghetti.
+### Frictions, with their real-life justification
+
+Every friction is a claim about how offices work — if a number can't be
+defended by its real-world row, it doesn't belong in the physics. None of
+this appears in any tool description: channel economics are learnable only.
+
+**Chat**
+| friction | value | real life |
+|---|---|---|
+| NPC reply latency | 5–45 min in-hours; else next morning | people see Slack between tasks; overnight pings get answered at 9am |
+| focus tax on recipient | `costs.chat_interrupt_minutes` (default 20), **serialized** | an interruption costs ~20 min of refocus (attention-research classic); three pings are three broken flows |
+| delivery to PM | instant push, wakes mid-sleep | a direct ping buzzes your phone |
+| unknown recipient | error: not in directory | you can't DM someone outside the workspace |
+
+**Email**
+| friction | value | real life |
+|---|---|---|
+| focus tax | zero, both directions | email is async by social contract |
+| NPC reads | next wakeup (~90–150 min) | people process inboxes in batches |
+| PM receives | next 30-min grid tick, then push | inbox-refreshing is a background habit; in a DES that habit is a scheduled event |
+| unknown address | bounces, reported in the result | mail to nowhere bounces; it never crashes the office |
+
+**Meetings**
+| friction | value | real life |
+|---|---|---|
+| capacity block | every attendee, full duration (≤240 min) | a 1-hour meeting with 4 people costs 4 person-hours |
+| `talk_in_meeting` | zero queue latency; ~3 min of slot per exchange | everyone's in the room — answers are immediate, but talking consumes the shared hour |
+| reply deferral | chats answered after the meeting | people don't answer DMs mid-meeting |
+| minutes | verbatim broadcast to attendees at end | the record is the meeting's durable output |
+
+### How agents learn the frictions
+
+Three routes, deliberately layered: **evidence** (email K read directly off
+reply timestamps; the tax inferred from completions slipping against
+calibrated velocity), **testimony** (physics is *felt* — the tax lands in
+the holder's experience stream as "that ping broke your concentration", and
+whether they voice it is persona-gated, so listening to complaints is the
+honest in-episode shortcut), and **in-weights** (the reward gradient across
+rollouts, which needs no explicit knowledge at all).
+
+## 6. Work: tasks, the scheduler, filing, the org fallback
 
 ### Task origins
 
-Tasks enter the world three ways, all landing in one dynamic list where every
-addition is a logged `task_added` mutation (so rewind/replay reconstruct the
-board at any time):
+1. **Seed** — `project.tasks`, arrival = sim start.
+2. **External (OOD)** — `task_arrivals[]`: the arrival creates the *need*
+   (truth) but writes nothing to the tracker. The ask reaches the PM as
+   communication (chat or email announcement with a deterministic
+   `(ticket: id)` reference). **The PM must file it** (`add_task` with that
+   id) before it appears on the board or can be assigned. Filing mints
+   nothing; an unfiled ticket sits at zero progress forever.
+3. **Agent** — made-up tasks are trackable but carry **zero rubric weight**
+   (the anti-minting guard) while still consuming real capacity if staffed.
 
-1. **Seed** — `project.tasks` in the scenario; arrival = sim start.
-2. **External (OOD)** — `task_arrivals[]`: scheduled, externally-caused work
-   (an incident, a legal request) that lands mid-week, optionally announced
-   by an NPC. These are out-of-distribution on purpose: the agent's plan has
-   to survive them.
-3. **Agent** — the agent adds tasks for tracking (a synchronous action).
+### The scheduler (`sim/tasks.py`)
 
-The scheduler is a deterministic greedy: per assignee, one task at a time,
-working hours only; a task starts when its assignee is free AND it has
-arrived AND its blockers are done; when free, the assignee picks urgent-first
-then creation order. Non-preemptive: an urgent arrival jumps the queue but
-never interrupts in-flight work. Tasks with no assignee/effort are
-"tracking" items — visible, never scheduled.
+Deterministic, **preemptive**, work-conserving, event-sourced. Per person,
+one task at a time, working hours only, minus busy intervals (meetings +
+the serialized chat tax). A task is ready once it has arrived, somebody
+holds it, and its blockers are done. At every instant each person works
+their highest-priority ready task (**urgent → priority → creation order**);
+the moment that changes — a higher-priority task arrives or unblocks, or
+the PM reprioritizes — they switch, and the paused task keeps its accrued
+work and resumes exactly where it stopped. Progress is the fold of the
+resulting work segments, so true progress is answerable at any instant.
 
-## 5a. The tool surface (`sim/tools.py`)
+- **`assigned_at` — no retroactive credit.** Every assignment mutation
+  stamps the instant; work starts at `max(arrival, assigned_at)`.
+  (Assignment used to be retroactive — a 16:00 pickup was credited work
+  since the 11:30 arrival — which made acting early worthless.)
+  Reassignment persists progress-so-far into `done_hours` at handoff:
+  prior work is kept, never re-credited.
+- **`reprioritize` — ordering without minting.** The PM appends a
+  timestamped `order_event` (working priority P0–P3 and/or urgency) to any
+  filed task. Applied **forward-only** — a Thursday reprioritization can
+  never rewrite Monday's schedule — and for *scheduling only*: the authored
+  `priority` keeps its rubric weight, so the PM decides what gets worked
+  first but can never relabel a task to score more.
+- **Skill multipliers** (partially landed): per-(person × task-tag) speed
+  factors, authored at generation time ("LLM authors, rules execute" —
+  never a runtime LLM call, which would give GRPO rollouts different
+  physics and make the multiplier promptable). The ceiling side is wired
+  (`optimal.ideal_effort_hours` uses the best eligible worker, clamped ≥1×
+  so OPT stays a true upper bound); the runtime lookup lands with the
+  scenario generator.
 
-One registry — name + description + JSON schema + handler — drives the web
-UI/REST API today and becomes the Claude tool list for the agent harness
-verbatim. All handlers are synchronous agent actions (+1 sim-min cost):
+### The org fallback: the baseline is not a strawman
 
-| Tool | Consequence |
-|---|---|
-| `send_chat` / `send_email` | message delivery; reply scheduled by latency rule (email is hours, chat is minutes; meetings defer replies) |
-| `add_task` / `assign_task` / `update_tracker_note` | logged task mutations — reassignment genuinely changes `compute_schedule` |
-| `schedule_meeting` | books attendees; **costs their working capacity** (task projections slip); at meeting end one LLM call writes a transcript, which becomes shared context for every attendee — the NPC↔NPC information channel |
-| `write_doc` | shared docs enter recipients' context |
-| `view_tasks` / `view_inbox` | read-only observations |
-| `advance_time` / `wait_for_reply` | the agent's **yield primitives** (below) |
+A no-PM team still functions — badly. If an arrival is still unowned at its
+authored `fallback.at`, the natural volunteer grabs it (assigned, filed,
+tracker-noted). **Same physics in every run**, so the null baseline includes
+the org's self-organization, and the PM earns credit only for what
+coordination adds: better owners, acting before the fallback, spreading
+load the volunteer won't. Authoring rule: the org reacts fast to urgent
+incidents (hours) and slowly to cross-team paperwork (days) — that latency
+gap, and the volunteer's overload, is where PM value lives. Measured
+gradient on `demo`: lazy 0.000, Friday-scramble reassignment ~0.04, prompt
+file+assign+spread ~0.91.
 
-**Why time-yielding is a tool:** the agent owns time, so it needs a way to
-express "I choose to do nothing until X" — waiting instead of meddling is a
-real PM decision we want to measure. It is not an escape hatch: beats,
-arrivals, and escalations fire *during* the jump, and evaluation grades the
-world at a fixed horizon, so skipping time forfeits agency rather than
-dodging judgment. `wait_for_reply` gives up at a ~1.5-workday horizon so
-waiting can never silently burn the week. (Alternative considered:
-harness-driven turns, tau-bench style — rejected because pacing judgment is
-part of the skill under test.)
+### The labor pool binds both sides
 
-**Meetings and secrecy:** the transcript prompt lists each attendee's persona
-and private knowledge but instructs that characters only *say aloud* what
-they would realistically reveal in front of the specific people in the room —
-private knowledge steers behavior without being narrated.
+Stakeholders (`worker: false`, e.g. a VP) are excluded from OPT's labor pool
+— treating them as fungible engineers inflates the ceiling. The engine
+therefore refuses to assign them tickets, validation rejects stakeholder
+seed-assignees and fallback owners, and capacity/utilization/fairness all
+measure over workers only. Without the engine-side half, an agent could
+out-labor OPT and score above 1.
 
-## 5b. Operator time controls
+## 7. NPCs: pure appended-context agents
 
-The sim never advances itself, but the *operator* can advance it:
-`advance_until(target)` fires every event up to the target, then jumps the
-clock there — even through empty space (nights, weekends). The UI's
-+1h/+4h/+1day buttons and Play mode (repeated advances at a fixed sim-speed)
-are just this call in a loop; engine semantics are unchanged, so a full
-7-day run is a button press. The jump is logged (`clock_advanced`) so replay
-reproduces the final clock.
+**The contract:** they *do their work* (the scheduler accrues their hours —
+no LLM involved), they *experience* (every stimulus is pushed into an
+append-only context stream when it happens: messages, room lines, invites,
+docs, belief realizations, completions, felt interruptions), and they
+*speak, and only speak* — one LLM call per utterance; speech never mutates
+world state. No tools of any kind. The stream is a fold of the log:
+replay-safe, no hidden state, automatic change-awareness ("the meeting
+moved" is simply two entries).
 
-## 6. NPC execution model
-
-**The NPC contract** (the whole model in three lines):
-
-| Capability | Mechanism | Bound |
-|---|---|---|
-| **They do their work** | the deterministic scheduler accrues their task hours through the work calendar — no LLM involved | capacity is physics: meetings, interruptions, PTO all subtract |
-| **They read** | engine-injected derived views (own live tasks, timestamped 1:1 history, attended transcripts, shared docs, live meeting minutes) — reads are unconditional, never optional tool calls | each NPC sees only ITS slice; no global board, no others' workloads |
-| **They speak, and only speak** | replies (latency rules), pings (beat arms), meeting turns (speak-or-PASS agent decision) — the LLM chooses words, and in meetings *whether* to say them | speech NEVER mutates world state; every write action belongs to the PM's tools alone |
-
-Consequences: information asymmetry is structural (the optimization can only
-happen in the PM), determinism survives (text is the only sampled thing, and
-it's captured in the log), and the benchmark measures the agent — never the
-NPC model.
-
-An NPC is not a process. It is persona (static) + knowledge (config) + rules +
-one LLM call:
-
-- **WHEN** an NPC acts is decided by deterministic rules (latency sampling from
-  its seeded RNG stream, working-hours availability, heartbeat cadence).
-- **WHAT** it says is decided by a single LLM call *at event-fire time*, seeing
-  the persona, private knowledge, chat history — and a **live read-only
-  self-view** injected by the engine: its own tasks' true progress and
-  projections, its meetings, docs, transcripts. NPCs get "read tools" by
-  prompt injection, never by tool-calling loops — the reads are derived
-  views computed deterministically, the LLM stays a single call, and there
-  is still no write channel. (This fixes the stale-knowledge failure where
-  Sarah kept claiming 55% on Tuesday while ground truth had her at 94%.)
-
-Between events an NPC literally does not exist — no state can drift. All of an
-NPC's future behavior is visible in the heap (`pending` in the UI).
+- **WHEN** an NPC acts is deterministic: latency rules, wakeup cadence,
+  beat conditions, meeting turn offers (speak-or-PASS, least-spoken-first).
+- **WHAT** it says is one LLM call over persona + knowledge + stream, at
+  temperature 0 (removes sampling variance across rollouts; the NPC default
+  is a non-thinking Haiku-class model via `SIM_NPC_MODEL`).
 
 **Reasoning stays in the PM — by information asymmetry, not prompt rules.**
-NPCs see only their own slice (their tasks, their meetings, their thread);
-they emit local facts and human texture ("I'm on the incident till Wed —
-if I take T, something slips; your call"). They cannot answer about others'
-workloads (not in their views), cannot compute global schedules (no global
-board), and cannot execute anything (no write channel). The PM alone holds
-global observability (`view_tasks`) and allocation authority, so the
-optimization can only happen there — outsourcing it to an NPC means
-consulting someone strictly less informed than yourself, voiced by a cheap
-model (NPC brains default to Haiku via `SIM_NPC_MODEL`; the evaluated
-agent's model is a separate knob). This is eval integrity: the benchmark
-measures the PM's reasoning, never the NPCs'.
+An NPC sees only its own slice (its tasks via belief, its threads, its
+rooms). It cannot answer about others' workloads, compute global schedules,
+or execute anything. The PM alone holds global observability and allocation
+authority, so the optimization can only happen there — and the benchmark
+measures the PM's model, never the NPCs'.
 
-## 7. The determinism boundary
-
-Every subsystem is explicitly deterministic or LLM-based. **The LLM produces
-text only — it has no channel to mutate the world.** All world mutations come
-from scenario config, engine rules, or agent tools.
-
-**The randomness invariant.** The world must be a deterministic function of
-(config + seed, action sequence). Randomness is allowed anywhere provided:
-(a) every draw is keyed by (seed, stable decision id) — never by
-shared-stream order, where one extra agent action shifts every later draw
-and reintroduces rollout variance in a determinism costume; and (b) any draw
-that CAN be materialized before the run IS stamped into the config, so the
-gates (fairness, band, intent audit) can see and reject what they need to.
-Endogenous draws — weights that depend on the trajectory, e.g. a fallback
-volunteer chosen ∝ available hours at pickup time — stay lazy but keyed;
-they are legitimate dynamics, and any lever they hand the agent (shaping
-loads to shape who volunteers) should earn its own intent-audit line before
-being trusted.
-
-| Subsystem | Deterministic? | Notes |
-|---|---|---|
-| Clock, event queue, ordering | ✅ | seq-tiebroken heap |
-| Response latencies, heartbeats | ✅ | per-NPC seeded RNG streams |
-| Task scheduling & progress | ✅ | pure function (work calendar + busy intervals) |
-| External task arrivals | ✅ | **authored config**, fixed times/efforts — not LLM-generated |
-| Beats (fire/skip decision) | ✅ | condition checked against world truth |
-| Meeting capacity cost | ✅ | interval subtraction |
-| NPC message/ping text | 🤖 LLM | text only; captured in log → replay is LLM-free |
-| Meeting transcript text | 🤖 LLM | text only; same capture |
-
-**Bounds on the levers** (`sim/validate.py`): even the deterministic mutation
-paths are gated so no scenario author, procedural generator, or agent can
-push the world outside a reasonable envelope — validated at load
-(`validate_scenario`: task counts, effort ranges, dangling references, events
-inside the run window) and enforced at runtime (`check_task_bounds` on every
-task addition; meeting-duration cap). Defaults: ≤50 tasks, effort 0.5–80h,
-≤10 external arrivals, ≤4h meetings — overridable per scenario via a
-`bounds` block. If a future version ever lets an LLM propose world changes
-(e.g. generated arrivals), those proposals must pass the same gates.
-
-## 7b. Liveness invariants (no deadlock, no staleness)
-
-Tested in-repo (broken-brain clients, 14-day advances, zero-NPC configs):
-
-1. **The queue is never empty.** Every `npc_wakeup` reschedules itself at a
-   strictly-future time; scenarios must have ≥1 NPC (validated at load) —
-   the heartbeat chain is the sim's pilot light.
-2. **No zero-delay cycles.** Every scheduled event lands strictly after its
-   scheduling instant; `advance_until` always reaches its target (a high
-   runaway cap logs a warning instead of silently stopping short).
-3. **100% causal clock.** Invariant: *no undispatched event exists at or
-   before the clock, at any observable instant.* Queue pops advance time in
-   event order by construction; action-cost advances (+1 min) immediately
-   drain any events that became due, so the clock never passes over a
-   pending event — if the agent's 3rd action of a burst crosses a reply's
-   due-time, the reply fires right then and later actions happen in a world
-   where it exists. All scheduled events are strictly future (drain
-   terminates). A monotonicity guard in `step()` remains as
-   belt-and-suspenders and logs loudly if it ever engages.
-4. **LLM failures never stall the world.** Any NPC-brain exception —
-   API errors, thinking-only/truncated responses, bugs — degrades to
-   placeholder text; the event still completes and the queue keeps moving.
-   Agent-side API failures end the agent's week gracefully: the run
-   advances to horizon and is still scored.
-5. **Waiting is bounded.** `wait_for_reply` gives up at a ~1.5-workday
-   horizon with `replied: false` rather than silently consuming the week.
-
-## 8. Observer / driver separation
-
-The web UI is **read-only observability**: clock, rewind, feed, task board,
-timeline, trajectory. It never mutates the sim. Driving happens through the
-CLI, the tool API (`POST /api/tool`), or the agent harness — one writer,
-many watchers.
-
-## 9. Evaluation (`sim/eval.py`, rubrics in `rubrics/`)
-
-**v2 — two outcome metrics, and nothing else.** Over **authored tasks only**
-(agent-created tasks carry zero weight):
-
-    COMPLETION = Σ w · (progress + α·done)/(1+α)        did the work get done
-    EFFICIENCY = Σ w · done · (horizon − done_at)/span   how early it got done
-    COMBINED   = (completion + γ·efficiency)/(1+γ)       single scalar for RL
-
-    each reported as a ladder: null baseline ≤ agent ≤ OPT_ideal
-
-The efficiency metric makes noise self-punishing through physics: meetings
-and chat interruptions (10 focus-min tax per chat received) consume capacity
-→ completions land later → efficiency drops. Verified: identical assignments
-with 40 spam pings capture 50% completion / 32% efficiency vs 100%/99% clean
-— **no checks, no penalties, no keywords, no LLM anywhere in scoring**; the
-rubric (`rubrics/demo.json`) contains only the two metrics' parameters and
-the horizon.
-
-The ladder per run: **baseline ≤ agent ≤ OPT_ideal** where `OPT_ideal`
-(`sim/optimal.py`) is the frictionless optimum — communication free, skills
-1×, no interruptions; only arrivals, precedence, effort, serial capacity,
-calendars remain. A pure function of the scenario file (computed by exact
-search reusing `compute_schedule`), it is a stable ceiling for normalization
-(`% captured`), regret, and generator validity gating (reject instances
-where OPT ≈ baseline: nothing to win).
-
-Rubrics are separate versioned artifacts in `rubrics/`, referenced by the
-scenario and copied into each run dir (runs stay re-gradeable forever).
-Informational behavior (discovery, stakeholder communication, tracker
-hygiene) is deliberately **unscored** — communication is instrumental, and
-its value flows through allocation quality and capacity into the two
-metrics. Behavioral readouts live in `navigation.json` (tool mix, channel
-mix, contact patterns), which is telemetry, never reward.
-
-### The original check-based design (v1, superseded)
-
-**Score the world, not the agent.** Ground truth lives in the scenario's
-`evaluation` block: weighted checks (world-state predicates) plus penalties,
-graded at a fixed horizon (`python -m sim.eval runs/<id>`).
-
-**Delta over a null-agent baseline.** The same scenario is re-run with an
-agent that does nothing (stub LLM — NPC text never mutates world state, so
-the baseline is deterministic and free; it's persisted under
-`runs/<id>/baseline/` for inspection). Scoring per check:
-
-| agent | baseline | points |
-|---|---|---|
-| pass | fail | **+weight** (agent-caused improvement) |
-| pass | pass | 0 — *happens anyway; not yours* |
-| fail | fail | 0 |
-| fail | pass | **−weight** (agent-caused regression) |
-
-The fixed horizon means time-skipping can't dodge grading, and the baseline
-delta is the causality gate: credit requires the outcome to NOT occur
-without the agent.
-
-**Check types (all deterministic):** `task_done_by`, `task_has_owner`,
-`task_updated_by_agent` (tracker hygiene), `agent_told` (stakeholder
-informed in time), `discovered` (the agent surfaced a hidden fact).
-Message-content checks use keyword lists declared in the config —
-inspectable and replay-stable. **No LLM judges anywhere in evaluation**;
-if one is ever added it would decide only "does this text convey fact F,"
-never whether an outcome happened (see §7 determinism boundary).
-
-**Anti-reward-hacking:** activity earns nothing (only world-state checks
-score); message spam and over-budget meeting time are penalized; meetings
-already cost real capacity in-sim; gaming the tracker does nothing because
-checks read ground truth, not reported status. Verified behavior: a
-do-nothing week scores 0.0; a run that discovers the slip, warns the
-stakeholder, assigns the unowned P1 + questionnaire, and corrects the
-tracker scores the full 12/12 available beyond baseline.
-
-## 9b. Fairness is a rubric too
-
-Two senses, both deterministic, both measurable from config/schedule alone:
-
-**Fairness OF the scenario (authoring gate).** A scored ask must be
-physically completable from the moment the PM could first KNOW it (chat:
-instant; email: the next batch tick). Anything tighter scores luck, not
-skill — poison for GRPO advantages. Enforced twice: `validate.py` rejects
-unfair arrivals outright, and the difficulty fingerprint reports
-`reaction_ratio` per arrival/confession (work-calendar window from delivery
-to horizon ÷ effort revealed; ≥1.0 required, 1.0–1.3 is a legitimate tight
-squeeze). The ladder: demo_1 4.75 / demo 3.88 / demo_2 1.56 — the tightest
-variant is tight but
-never impossible.
-
-**Fairness OF the PM (outcome metric).** Per-person utilization = hours
-worked *within the graded window* ÷ hours available;
-`workload_fairness = 1 − σ(utilization)` (population std — variance sees the
-whole team's imbalance, not just the extreme pair). A pure outcome of
-assignment decisions: two strategies with identical task scores separate
-when one rides a single engineer (demo: pile-everything-on-Dave 0.69 vs
-spread 0.77). Reported as a raw baseline → agent → OPT triplet, NOT
-normalized: dependency chains can force imbalance on perfect play too, so
-OPT is the reference, not 1.0. Kept out of the combined scalar by default —
-it's a second axis for the Pareto view (task value × team health), and can
-be folded into `combined` later via a rubric weight if training should
-optimize it directly.
-
-## 10. Epistemics: three layers of knowing
+## 8. Epistemics: three layers of knowing
 
 | Layer | Who has it | Mechanism |
 |---|---|---|
-| **Truth** | engine + eval only | the scheduler; nobody in the sim reads it — not the PM, not even the task's holder |
-| **Belief(t)** | each holder, about their own work | honest-but-possibly-wrong; **matures on an authored schedule** (`belief` entries → `belief_update` events, optionally with a proactive confession ping). Red herrings are the same thing about the org: confidently-held false knowledge (authored in `herrings` + persona lines) |
+| **Truth** | engine + eval only | the scheduler; nobody in the sim reads it — not even the task's holder |
+| **Belief(t)** | each holder, about their own work | honest-but-possibly-wrong; matures on an authored schedule (`belief[]` → `belief_update`, optional proactive confession ping). Red herrings are the org-level version: confidently-held false knowledge |
 | **Tracker** | everyone | the record — lags, inherits stale beliefs; auto-updates only on **completions**, the one public reliable signal |
 
-Consequences, all deterministic (zero LLM on the information path):
+Consequences (zero LLM on any information path):
+
 - **The interrogation hack is dead**: asking everyone Monday yields honest
   *wrong* answers — there is no perfect truth to extract, only a process to
-  run (slack against noisy estimates, re-checks, fast reaction to authored
-  belief corrections).
-- **Exploration is a first-class skill**: skill/velocity factors and real
-  progress are inferable only from observed completions (≈2 data points per
-  person) blended with persona-colored self-reports. Channel economics (the
-  email batching factor K, meeting costs, tracker lag) are deliberately
-  ABSENT from tool descriptions — discovered, never documented.
-- **Noise resistance is measurable**: chasing an authored herring (Dave's
-  "rate-limiting is critical", Priya's "questionnaire is an hour") burns
-  capacity the score prices; the herring list makes the distractors
+  run.
+- **Exploration is first-class**: velocities are inferable only from
+  observed completions (~2 data points per person); channel economics are
+  absent from tool descriptions; the board must be re-checked because org
+  pickups land on it silently (pull).
+- **Noise resistance is measurable**: chasing an authored herring burns
+  capacity the score prices; the `herrings` block makes distractors
   auditable per scenario.
-- **NPCs are pure appended-context agents**: no tools of any kind; every
-  stimulus (messages, room lines, invites, docs, belief realizations,
-  completions) is PUSHED into their experience stream when it happens; one
-  LLM call per utterance voices it. The stream is a fold of the log —
-  replay-safe, no hidden state.
-- **Physics is FELT, so testimony about it is honest**: the same 20
-  focus-minutes the scheduler charges for an in-hours chat lands in the
-  holder's experience stream ("that ping broke your concentration"). Whether
-  they *voice* it is persona-gated — Sarah endures three pings politely,
-  a fourth gets a terse "one thread, please" — so the fastest in-episode
-  route to learning channel economics is the human one: listen when people
-  tell you you're the problem. (How agents learn the taxes, in full: 1.
-  evidence — email K read directly off reply timestamps, tax inferred from
-  completions slipping vs calibrated velocity; 2. testimony — this
-  mechanism; 3. in-weights — the reward gradient across GRPO rollouts,
-  which needs no explicit knowledge at all.)
 
-### The information ledger
-
-Every quantity in the environment is classified by how it can be known:
+**The information ledger** — every quantity classified by how it can be known:
 
 | Class | Examples | Access | Cost |
 |---|---|---|---|
 | Hidden truth | true progress, projections, skill factors | inference only | — |
 | Exposed truth | completions, assignments, deadlines, calendars | tracker/events | free |
-| Testimony | beliefs, self-assessments, org folklore | asking | latency + tax + honestly-wrong risk |
-| Learnable in-trajectory | velocities (from completions), testimony reliability, email K | probe + observe | time & actions |
+| Testimony | beliefs, self-assessments, felt interruptions, org folklore | asking / listening | latency + tax + honestly-wrong risk |
+| Learnable in-trajectory | velocities, testimony reliability, email K | probe + observe | time & actions |
 
 Two learning channels, deliberately separate: **in-weights** (environment
-physics — channel economics, working hours; constant across tasks, absent
-from tool descriptions, learned across episodes) and **in-context**
-(instance latents — this week's wrong beliefs, this team's speeds; varied
-by the generator, must be inferred fresh each trajectory from evidence).
-The split trains adaptivity, not memorization.
+physics — constant across tasks, learned across episodes) and **in-context**
+(instance latents — this week's wrong beliefs, this team's speeds — varied
+per instance, inferred fresh each trajectory). The split trains adaptivity,
+not memorization; the generator must randomize instance latents (including
+ticket ids) so nothing leaks into weights.
 
-### Push vs pull: delivery semantics of every signal
+## 9. The determinism boundary
 
-Every interpersonal signal is classified on BOTH sides (`sim/signals.py`,
-one static table; `World.record` stamps each logged event with its
-`delivery` so runs are self-describing):
+**The LLM produces text only — it has no channel to mutate the world.** All
+mutations come from scenario config, engine rules, or agent tools.
 
-- **sender push** — a deliberate act, emitted now (type a chat, speak in a
-  room). **sender pull** — state exposed passively; others come read it.
-- **recipient push** — lands in the recipient's experience unasked, and can
-  interrupt (a chat in working hours costs ~20 serialized focus-minutes).
-  **recipient pull** — the recipient must come get it: on their own schedule
-  (email drains at the next wakeup batch) or by checking a surface
-  (the tracker board via `view_tasks`).
+**The randomness invariant.** The world must be a deterministic function of
+(config + seed, action sequence). Randomness is allowed anywhere provided
+(a) every draw is keyed by (seed, stable decision id) — never by
+shared-stream order, where one extra agent action shifts every later draw
+and reintroduces rollout variance in a determinism costume — and (b) any
+draw that can be materialized before the run **is stamped into the config**
+so the gates (fairness, band, intent audit) can see it. Endogenous draws
+(weights depending on the trajectory, e.g. a volunteer chosen ∝ available
+hours) stay lazy but keyed, and any lever they hand the agent should earn
+its own intent-audit line before being trusted.
 
-| Signal | Sender | Recipient | Physics |
-|---|---|---|---|
-| chat message | push | **push** | instant; interrupts — an NPC pays the 20-min serialized focus tax; the PM is *woken mid-`advance_time`* |
-| email | push | **push (batched)** | delivered by event on the recipient's batch cadence: NPCs at their next wakeup (the learnable K), the PM at the next `email_batch_minutes` grid tick. Delayed, zero tax |
-| meeting invite | push | push | lands on every attendee's calendar/stream |
-| room line (`talk_in_meeting`) | push | push | heard live by all attendees (wakes the PM if they're in the room); consumes the meeting slot |
-| minutes / transcript | push (auto) | push | broadcast to attendees at meeting end |
-| doc share | push | push | notification into each `shared_with` stream |
-| task added to board | push | **pull** | the board shows only *filed* tasks; anyone must check it to see them |
-| task board edit | push | pull | exception: an *assignment* additionally pushes a notify to the assignee |
-| task completion | push (auto) | push | the one public, reliable broadcast — delivered with the PM's next tool result, but never wakes them (only people wake you) |
-| holder belief | — (pull) | — | never emitted on its own; surfaced only when asked (testimony) or at an authored confession ping (which is a push chat) |
-
-**The PM's side, concretely — everything is push, because this is a DES.**
-A human PM "always refreshing email" is a background process; our agent has
-no background thread, and in a discrete-event simulation nothing happens
-except by an event popping off the heap. So there is no poll tool anywhere:
-push-class signals ride along with every tool result (`notifications`), and
-a chat ping, a delivered email batch, or someone speaking in your meeting
-interrupts `advance_time` early, handing control back at that instant.
-Email's nature survives as *when its event fires*: an `email_delivery`
-event on a fixed batch grid (`email_batch_minutes`, default 30) rather than
-instantly — delayed but tax-free. Board broadcasts (completions) are
-delivered with the next result but never break sleep — only people and mail
-do. `view_inbox` is pure scrollback of what has been delivered; an email in
-flight is invisible.
-
-### Channel frictions, with their real-life justification
-
-Every friction is a claim about how offices actually work — if a number
-can't be defended by the real-world row, it shouldn't be in the physics.
-
-**Chat**
-| friction | value | real life |
+| Subsystem | Deterministic? | Notes |
 |---|---|---|
-| NPC reply latency | 5–45 min (work hours; else next morning) | people see Slack between tasks, not instantly; overnight pings get answered at 9am |
-| focus tax on recipient | 20 min per message, **serialized** | an interruption costs ~20 min of refocus on deep work (attention-research classic); three pings are three broken flows, not one |
-| delivery to PM | instant push, wakes mid-sleep | a direct ping buzzes your phone — humans are interrupt-driven for chat |
-| unknown recipient | error: not in directory | you can't DM someone who isn't in the workspace |
+| clock, queue, ordering | ✅ | seq-tiebroken heap; monotonic by construction |
+| latencies, wakeups | ✅ | per-NPC seeded RNG streams |
+| scheduling & progress | ✅ | pure function (calendar + busy intervals) |
+| arrivals, fallbacks, beliefs, beats | ✅ | authored config, fixed times |
+| email batch grid, focus tax | ✅ | static config (`email_batch_minutes`, `costs.*`) |
+| meeting capacity cost | ✅ | interval subtraction |
+| scoring, bands, gates | ✅ | pure functions of config + log |
+| NPC / transcript text | 🤖 LLM | text only, temperature 0, captured in log → replay is LLM-free |
 
-**Email**
-| friction | value | real life |
-|---|---|---|
-| focus tax | zero, both directions | email is async by social contract — nobody drops their editor because mail arrived |
-| NPC reads | at next wakeup (~90–150 min) | people process inboxes in batches between work blocks |
-| PM receives | next 30-min grid tick, then push | "always refreshing my email" is a background habit; in a DES that habit is a scheduled delivery event |
-| unknown address | bounces (reported in result) | mail to a nonexistent address bounces; it never crashes the office |
+**Bounds on the levers** (`sim/validate.py`): ≤50 tasks, effort 0.5–80h,
+≤10 arrivals, ≤240-min meetings, events inside the run window — validated
+at load and enforced at runtime on every mutation path, so no author,
+generator, or agent can push the world outside the envelope.
 
-**Meetings**
-| friction | value | real life |
-|---|---|---|
-| capacity block | every attendee, full duration | a 1-hour meeting with 4 people costs the org 4 person-hours of work — the most expensive artifact in any company |
-| `talk_in_meeting` | zero queue latency, ~3 min of slot per exchange | everyone is already in the room: answers are immediate, but the talking itself consumes the shared hour |
-| reply deferral | chats answered after the meeting ends | people don't answer DMs mid-meeting (or you wish they didn't) |
-| minutes broadcast | verbatim, to all attendees at end | the meeting's one durable output is its record — same context for everyone who was there |
+## 10. Evaluation: the band
 
-**Universal**: every PM action costs 1 sim-minute (typing and deciding take
-real time), and due events drain on every advance (the world doesn't pause
-because you're busy).
+Over **authored tasks only** (agent-created tasks carry zero weight),
+graded at a fixed horizon, no checks, no keywords, no LLM anywhere:
 
-**External work arrives as communication, never as board state.** An arrival
-(`task_arrivals[i]`) creates the *need* (truth) but writes nothing to the
-tracker. The ask reaches the PM via `announce` — chat (instant push) or
-email (batched push, lands a grid-tick later) — carrying a deterministic ticket reference
-(`(ticket: id)`, appended by rules, not the LLM voice). The PM must file it
-(`add_task` with that id) before it appears on the board or can be assigned.
-Filing mints nothing: only the authored ticket carries rubric weight, an
-unfiled ticket sits at zero progress forever, and made-up tasks stay
-zero-weight — so the outcome metrics price discovery, reading your inbox,
-and record hygiene without any behavioral checks.
+    COMPLETION = Σ w · (progress + α·done)/(1+α)         did the work get done
+    EFFICIENCY = Σ w · done · (horizon − done_at)/span    how early it got done
+    COMBINED   = (completion + γ·efficiency)/(1+γ)        the scalar for RL
+    DONE-RATE  = W(shipped)/W(all)                        what fraction shipped
+    FAIRNESS   = 1 − σ(per-worker hours-worked/available) team health
 
-**The org fallback: the baseline is not a strawman.** A no-PM team still
-functions — badly. Each arrival carries an authored
-`fallback: {npc, at}`: if the ask is still unowned at that time, its
-natural volunteer just grabs it (assigned, filed, tracker-noted; source
-`org`). Same physics in EVERY run, so the null baseline includes the org's
-self-organization and the PM earns credit only for what coordination adds:
-picking better owners, acting before the fallback, spreading load the
-volunteer won't. Authoring rule: the org reacts fast to urgent incidents
-(hours) and slowly to cross-team paperwork (days) — that latency gap is
-where PM value lives. This forced a physics fix: `assigned_at` is stamped
-on every assignment mutation and the scheduler starts work at
-max(arrival, assigned_at) — assignment used to be retroactive (a 16:00
-pickup was credited work since the 11:30 arrival), which made acting early
-worthless. Reassignment persists progress-so-far into `done_hours` at the
-handoff instant, so prior work is kept but never re-credited. Measured
-gradient on the demo: lazy 0.000, Friday-scramble reassign 0.042, prompt
-file+assign+spread 0.926.
+Each is a ladder **baseline ≤ agent ≤ OPT_ideal**:
 
-### Skill multipliers (decided, not yet implemented)
+- **Baseline** = the same scenario with a do-nothing agent (stub LLM), org
+  fallback included — a complete unmanaged team, not a strawman. Score 0
+  means "added nothing beyond it"; negative means the agent's activity
+  (focus taxes, meetings, busywork) made the world worse.
+- **OPT_ideal** (`sim/optimal.py`) = frictionless exhaustive search over
+  worker assignments: communication free, skills at the best clamped rate,
+  no interruptions. A pure function of the scenario file — the stable
+  ceiling.
+- **`score`** = (agent − baseline)/(OPT − baseline), the normalized band
+  position that makes 100 tasks commensurable. **`score_odds`** =
+  delta/remaining-regret = N/(1−N): the same measurement with the top end
+  stretched — gain per unit of regret, useful because the relaxed ceiling
+  compresses top-end differences (the achievable gap is measurable per task
+  by running the friction-respecting oracle policy; ~0.3% of the band on
+  `demo`). **`reward`** is always numeric for training loops (falls back to
+  the raw delta on degenerate instances).
+- **Fairness is reported, not normalized** — dependency chains can force
+  imbalance on perfect play, so OPT is the reference, not 1.0. It separates
+  equal-scoring strategies (pile-on-the-volunteer vs spread) and stays out
+  of `combined` by default: a second Pareto axis (task value × team
+  health).
 
-Per-(person × task) speed multipliers are realistic — Sarah is faster on DB
-work than on frontend — but they must NOT be a runtime LLM call
-(`multiplier = LLM(skills, task)`). Two reasons, both fatal for GRPO:
-(1) group-relative advantages compare K rollouts of the same task T; if the
-physics differ between rollouts, the advantage estimate is noise, not
-signal; (2) anything an LLM computes from text is promptable — an agent
-that words its messages or task notes the right way is optimizing the
-judge, not the schedule.
+Noise punishes itself through physics — interruptions and meetings consume
+capacity, completions land later, efficiency drops — so communication,
+discovery, and record hygiene are deliberately unscored; their value flows
+through outcomes. Behavioral readouts live in `navigation.json` (tool mix,
+channel mix, contact patterns): telemetry, never reward.
 
-The setting that keeps both realism and determinism: **LLM authors,
-rules execute.** Tasks carry tags (`["backend", "db"]`), people carry a
-skill map (`{"db": 1.3, "frontend": 0.7}`), and the runtime multiplier is a
-pure lookup (e.g. geometric mean over matching tags, default 1.0) — frozen
-into the scenario config at *generation time*, where an LLM may freely
-propose skills/tags from personas. Constant across all rollouts of T,
-replayable, OPT-compatible (the ideal relaxation pins multipliers at 1×),
-and hidden: the PM learns who is fast at what only from observed
-completions, like everything else.
+## 11. Task authoring and difficulty
 
-## 10b. Truth vs. tracker (superseded by §10; kept for history)
+The authoring loop is config-iteration with analytic gates — seconds per
+iteration, zero LLM cost:
 
-Ground-truth task state (the analytic function) is world state. What people
-*report* is separate data (`reported` on each task; NPC knowledge). Sarah's
-tracker entry says 70%; the truth is 55%. The discovery loop — noticing the
-gap and asking the right person the right question — is the core gameplay,
-and the future evaluator scores outcomes against truth, not against reports.
+1. **Fairness gate** (`sim/validate.py`): a scored ask must be physically
+   completable from the moment the PM could first *know* it (chat: instant;
+   email: next batch tick). Anything tighter scores luck — rejected at load.
+   The fingerprint reports `reaction_ratio` per arrival/confession (≥1.0
+   required; 1.0–1.3 is a legitimate squeeze).
+2. **Difficulty fingerprint** (`sim/difficulty.py`) — hardness is a vector:
+   winnable band, capacity utilization, forced triage
+   (`opt_done_weight_rate < 1`: even perfect play must sacrifice),
+   assignment divergence, interrupt load, reaction ratios, and
+   `log10_trajectory_classes` (the outcome-distinguishable decision space:
+   who^tasks × when-windows; ~10¹²–10¹⁶ for the current tasks — the space
+   the band compresses to one dimension).
+3. **Band stamping** (`--stamp`): the no-PM baseline and OPT anchors are
+   embedded in each scenario file as documentation; recomputable in
+   milliseconds, re-stamp after edits.
+4. **Intent audit** (`sim/intent.py`): a task is authored with an intent —
+   the decisions a winning PM must make — and the audit *proves it
+   causally* by playing deterministic policy ablations (oracle / late /
+   no-spread / noisy) and measuring each mechanism's **share of the band**.
+   A share ≈ 0 means the task doesn't teach that skill; one mechanism
+   owning everything means a one-bit task. Current ladder: `demo` is a
+   timing task (preempt-the-fallback owns 0.999 of the band), `demo_2` is
+   a full coordination task (timing 0.70 / allocation 0.37 / channel
+   discipline 0.29, forced triage, band 5.14).
+5. **Hardness is measured, never asserted**: scenario names are neutral
+   (`demo_1`, `demo_2`); the empirical probe ladder (score degradation
+   across models) is the ground truth the fingerprint must be calibrated
+   against, and the dashboard colors tasks by band gap (VIBGYOR) so the
+   difficulty axis is visible at a glance.
+
+Band width is itself an authored property: it equals the size of the org's
+failure without a PM. A scenario whose fallback merely delays work has a
+timing-only band (~0.75); one whose overloaded volunteer lets P1s die has a
+delivery band (~5+) where "what ships" is at stake.
+
+## 12. The harness
+
+Two probes through the SAME tool registry the UI uses (`sim/harness.py`);
+the agent is never shown the evaluation.
+
+- **scripted** — a deterministic known-good tool sequence: zero agent
+  tokens, the floor above baseline, exercises every tool surface.
+- **llm** — a Claude model plays the PM. The loop is **event-driven, not
+  turn-budgeted**: the agent acts; when it yields (a response with no tool
+  calls), the harness rolls sim-time forward interruptibly; a push (chat,
+  delivered email, room line) wakes the PM and is handed over as the next
+  user message. Sim-time is the constraint — `max_turns` is only a runaway
+  guard for an agent that never advances the clock. Agent-side API errors
+  end the week gracefully; the run still scores.
+
+Each run writes `meta.json` (probe, model, task = scenario name),
+`navigation.json` (how it moved: tool/channel mix, act-vs-yield, contact
+per NPC, sim-time coverage), and `scorecard.json`.
+
+## 13. Observability
+
+Strict observer/driver separation: the web UI never mutates the sim — one
+writer (CLI / tool API / harness), many watchers.
+
+`sim/server.py` serves three modes: own engine, `--watch <run_dir>` (tails
+any run's `events.jsonl`, live or finished), and `--hub` (every run in
+`runs/`, with `GET /api/runs` and `GET /api/tasks` — runs grouped by task
+with band and per-model means). The single-page UI (`web/index.html`) is
+hash-routed (`#<tab>&run=<id>&task=<id>` — refresh/back/forward restore
+exactly): Feed (chat + board + pending), Timeline (every event + rewind),
+Trajectory (per-person swimlanes plus a **PM-trajectory panel**: every
+agent action in order), and Benchmark — overview charts where every task is
+one VIBGYOR-colored curve through its per-model *mean* points, above a
+filterable task table that expands to model means, a mini chart, and run
+rows that deep-link straight into that run's trajectory. The validation
+loop is three clicks: task → behavior → run → PM trajectory.
+
+## 14. Tests
+
+`.venv/bin/python -m unittest discover -s tests` — deterministic, ~0.5s,
+zero LLM calls, on a self-contained fixture scenario (tuning shipped
+scenarios never breaks the suite).
+
+- **Example tests** pin every bug class hit during development: replay
+  dropping message fields, retroactive assignment, priority-blind queues,
+  crash-on-unknown-recipient, fallback double-fires, truth leaks in tool
+  returns, unfair arrivals, value minting, the odds identity.
+- **Property tests** guard the DES claims under seeded random
+  interleavings — causality, monotonicity, liveness, replay equality,
+  granularity-irrelevance, and the ceiling (score ≤ 1 even for adversarial
+  play) — asserted after *every* fuzzed action. Fixed seeds: a failure is a
+  reproducible counterexample, never flake. The fuzzer found a real
+  causality hole (co-temporal events left undispatched on wake) within its
+  first 0.2 seconds of existence.

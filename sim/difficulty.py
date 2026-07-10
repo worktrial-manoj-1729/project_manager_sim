@@ -62,7 +62,8 @@ def fingerprint(scenario, rubric=None):
     assigned = [dict(t, assignees=[opt["assignment"][t["id"]]])
                 if t["id"] in opt["assignment"] else t for t in tasks]
     sched = compute_schedule(assigned, start)
-    last_done = max((s["done_at"] for s in sched.values()), default=start)
+    last_done = max((s["done_at"] for s in sched.values()
+                     if s["done_at"] is not None), default=start)
 
     authored_owner = {t["id"]: (t.get("assignees") or [None])[0] for t in tasks}
     remaining = {t["id"]: t.get("effort_hours", 0) - t.get("done_hours", 0)

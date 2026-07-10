@@ -256,15 +256,19 @@ class Engine:
             return {"error": "no task %r on the tracker" % task_id}
         if priority is not None and priority not in ("P0", "P1", "P2", "P3"):
             return {"error": "priority must be P0..P3, got %r" % priority}
-        changes = {}
-        if priority is not None:
-            changes["order_priority"] = priority
-        if urgent is not None:
-            changes["order_urgent"] = bool(urgent)
-        if not changes:
+        if priority is None and urgent is None:
             return {"error": "nothing to change — pass priority and/or urgent"}
         self._advance_action_clock()
-        self.world.update_task(task_id, changes, "agent")
+        # a TIMESTAMPED order event: the scheduler applies it forward-only
+        # (a Thursday reprioritization can never rewrite Monday's schedule)
+        ev = {"at": self.world.clock}
+        if priority is not None:
+            ev["order_priority"] = priority
+        if urgent is not None:
+            ev["order_urgent"] = bool(urgent)
+        events = list(task.get("order_events") or []) + [ev]
+        self.world.update_task(task_id, {"order_events": events}, "agent")
+        changes = {k: v for k, v in ev.items() if k != "at"}
         for a in task.get("assignees", []):
             if a in self.world.npcs:
                 self.world.npcs[a].notify(

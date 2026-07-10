@@ -49,33 +49,40 @@ class TestOrdering(unittest.TestCase):
 
 
 class TestReprioritize(unittest.TestCase):
-    def test_order_override_changes_scheduling_only(self):
-        """The PM can reorder a queue (order_priority/order_urgent) but the
+    def test_order_event_changes_scheduling_only(self):
+        """The PM can reorder a queue via timestamped order_events, but the
         authored priority keeps the rubric weight — no value minting."""
         tasks = [
             {"id": "p1", "title": "p1", "assignees": ["bo"], "effort_hours": 4,
              "priority": "P1", "arrival": START},
             {"id": "p2", "title": "p2", "assignees": ["bo"], "effort_hours": 4,
-             "priority": "P2", "order_priority": "P0", "arrival": START},
+             "priority": "P2", "arrival": START,
+             "order_events": [{"at": START, "order_priority": "P0"}]},
         ]
         v = _view(tasks, START + 1)
         self.assertLess(v["p2"]["projected_done"], v["p1"]["projected_done"])
         self.assertEqual(v["p2"]["priority"], "P2")  # scoring weight untouched
 
-    def test_order_urgent_override(self):
+    def test_order_events_are_forward_only(self):
+        """A reprioritization at time T reorders work only from T on — it can
+        never rewrite the schedule that already happened (preemptive switch,
+        work conserved)."""
+        mid = START + 120  # two hours in
         tasks = [
-            {"id": "u", "title": "u", "assignees": ["bo"], "effort_hours": 4,
-             "priority": "P2", "urgent": True, "order_urgent": False,
-             "arrival": START},
-            {"id": "n", "title": "n", "assignees": ["bo"], "effort_hours": 4,
-             "priority": "P2", "arrival": START},
+            {"id": "a", "title": "a", "assignees": ["bo"], "effort_hours": 4,
+             "priority": "P1", "arrival": START},
+            {"id": "b", "title": "b", "assignees": ["bo"], "effort_hours": 4,
+             "priority": "P2", "arrival": START,
+             "order_events": [{"at": mid, "order_urgent": True}]},
         ]
-        v = _view(tasks, START + 1)  # de-urgented: creation order decides
-        self.assertLess(v["u"]["projected_done"], v["n"]["projected_done"])
-        tasks[0]["order_urgent"] = True
-        tasks[1]["order_urgent"] = False
-        v = _view(tasks, START + 1)
-        self.assertLess(v["u"]["projected_done"], v["n"]["projected_done"])
+        # before the event: bo works `a` (higher priority)
+        before = _view(tasks, mid - 1)
+        self.assertGreater(before["a"]["true_done_hours"], 0)
+        self.assertEqual(before["b"]["true_done_hours"], 0)
+        # after: bo switched to `b`; a's accrued work is conserved
+        after = _view(tasks, mid + 60)
+        self.assertAlmostEqual(after["a"]["true_done_hours"], 2.0, places=1)
+        self.assertGreater(after["b"]["true_done_hours"], 0)
 
 
 class TestAssignedAt(unittest.TestCase):

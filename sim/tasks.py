@@ -6,14 +6,16 @@ start), injected on a schedule by external beats (OOD arrivals), or added by
 the agent for tracking. Every arrival is a logged `task_added` mutation, so
 rewind/replay reconstruct the board at any time.
 
-Scheduling semantics (deterministic, non-preemptive, work-conserving):
+Scheduling semantics (deterministic, PREEMPTIVE, work-conserving):
 - Each assignee works one task at a time, only during working hours
   (Mon-Fri 09:00-17:30).
-- A task can start only after: its assignee is free, it has ARRIVED, and all
-  its blockers are done.
-- When an assignee frees up, they pick the highest-priority ready task:
-  urgent tasks first, then creation order. Urgent arrivals jump the queue but
-  do NOT interrupt in-flight work.
+- A task is READY once it has arrived, somebody holds it
+  (max(arrival, assigned_at)), and its blockers are done.
+- At every instant each person works their highest-priority ready task
+  (urgent -> priority -> creation order, with the PM's timestamped
+  `order_events` applied forward-only). When that changes — a higher-priority
+  task arrives or unblocks, or a reprioritization fires — they SWITCH; the
+  paused task keeps its accrued work and resumes exactly where it stopped.
 - Tasks without an assignee or effort are "tracking" items: visible on the
   board, never scheduled.
 """
@@ -72,17 +74,22 @@ def add_work_minutes(t, minutes, busy=()):
 _PRIORITY_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
 
-def _work_order_key(t, creation_idx):
-    """How an assignee sorts their ready queue: urgent first, then priority,
-    then creation order. The PM can REORDER via `order_urgent` / `order_priority`
-    (set by the reprioritize tool) — these override the defaults for SCHEDULING
-    only. Scoring weight still comes from the authored `priority`, so the PM
-    reorders work but cannot relabel a task to mint value."""
-    urgent = t.get("order_urgent")
-    if urgent is None:
-        urgent = t.get("urgent")
-    prio = t.get("order_priority") or t.get("priority")
-    return (0 if urgent else 1, _PRIORITY_RANK.get(prio, 2), creation_idx)
+def _order_at(t, clock):
+    """The scheduling order (urgent-rank, priority-rank) in effect for task t
+    at time `clock`. Authored `urgent`/`priority` are the defaults; the PM's
+    reprioritizations are TIMESTAMPED events (`order_events`, appended by the
+    reprioritize tool) applied FORWARD-ONLY — an event at time T changes the
+    order only for clock >= T, never retroactively. Scoring weight always comes
+    from the authored `priority`, so the PM reorders work but cannot relabel a
+    task to mint value."""
+    urgent, prio = t.get("urgent"), t.get("priority")
+    for ev in t.get("order_events") or []:
+        if ev.get("at", 0) <= clock:
+            if "order_urgent" in ev:
+                urgent = ev["order_urgent"]
+            if "order_priority" in ev:
+                prio = ev["order_priority"]
+    return (0 if urgent else 1, _PRIORITY_RANK.get(prio, 2))
 
 
 def _earliest(t, sim_start):
@@ -102,74 +109,111 @@ def _schedulable(t):
 
 
 def compute_schedule(tasks, sim_start, busy_by_assignee=None):
-    """Per schedulable task: {start, done_at}. Greedy event-driven scheduler.
+    """Fully PREEMPTIVE, event-sourced scheduler. At every instant each person
+    works their highest-priority READY task; the moment that changes — a
+    higher-priority task arrives or unblocks, or the PM reprioritizes at a
+    timestamp — they SWITCH, and the paused task keeps its accrued work and
+    resumes later from exactly where it stopped (work is conserved).
 
-    busy_by_assignee: {person: [(start, end), ...]} — meeting intervals that
-    consume that person's working time (meetings have a real capacity cost).
+    Returns, per schedulable task:
+        {start, done_at, segments: [(seg_start, seg_end, person), ...]}
+    where progress is the FOLD of the segments — so `task_view` can ask for
+    true progress at any past/future instant. Deterministic and replay-safe:
+    the only inputs are the task list (incl. timestamped `order_events`),
+    sim_start, and busy intervals.
+
+    busy_by_assignee: {person: [(start, end), ...]} — meetings/interruptions
+    that consume that person's working time.
     """
     busy_by_assignee = busy_by_assignee or {}
-    order = {t["id"]: i for i, t in enumerate(tasks)}
+    creation = {t["id"]: i for i, t in enumerate(tasks)}
     sched = {t["id"]: t for t in tasks if _schedulable(t)}
-    info, done_at, free = {}, {}, {}
-    for t in sched.values():
-        free.setdefault(_primary(t), sim_start)
-    unfinished = set(sched)
-    waiting = set()  # assignees that can't progress until someone else finishes
-    guard = 0
+    persons = {}
+    for tid, t in sched.items():
+        persons.setdefault(_primary(t), []).append(tid)
 
-    while unfinished and guard < 10000:
+    remaining = {tid: max(0.0, round((sched[tid]["effort_hours"]
+                                      - sched[tid].get("done_hours", 0)) * 60.0))
+                 for tid in sched}
+    segments = {tid: [] for tid in sched}
+    done_at, started = {}, {}
+    # tasks already complete at seed (done_hours == effort) are done the moment
+    # they exist — set done_at up front so blockers referencing them clear.
+    for tid in sched:
+        if remaining[tid] <= 0:
+            done_at[tid] = _earliest(sched[tid], sim_start)
+
+    # decision times we know statically: when each task becomes holdable
+    # (arrival/assignment) and every reprioritization timestamp. Completions
+    # are discovered dynamically as the sim advances.
+    statics = set()
+    for tid, t in sched.items():
+        statics.add(_earliest(t, sim_start))
+        for ev in t.get("order_events") or []:
+            statics.add(ev.get("at", sim_start))
+
+    def ready(tid, clock):
+        t = sched[tid]
+        if remaining[tid] <= 0 or _earliest(t, sim_start) > clock:
+            return False
+        for b in t.get("blocked_by", []):
+            if b in sched and (b not in done_at or done_at[b] > clock):
+                return False  # a scheduled blocker isn't finished by `clock`
+        return True
+
+    clock, INF, guard = sim_start, float("inf"), 0
+    while any(r > 0 for r in remaining.values()) and guard < 100000:
         guard += 1
-        active = {_primary(sched[tid]) for tid in unfinished}
-        pickable = [a for a in active if a not in waiting]
-        if not pickable:
-            break  # dependency cycle — remaining tasks are stuck
-        a = min(pickable, key=lambda x: (free[x], str(x)))
-        t_now = free[a]
+        # who works what at `clock`: each person's highest-priority ready task
+        chosen = {}
+        for pers, tids in persons.items():
+            avail = [tid for tid in tids if ready(tid, clock)]
+            chosen[pers] = (min(avail, key=lambda x: (_order_at(sched[x], clock),
+                                                      creation[x]))
+                            if avail else None)
+        # next decision point: earliest completion of a chosen task, or the
+        # next static event after `clock`
+        nxt, comp = INF, {}
+        for pers, tid in chosen.items():
+            if tid is None:
+                continue
+            c = add_work_minutes(clock, remaining[tid], busy_by_assignee.get(pers, ()))
+            comp[pers] = c
+            nxt = min(nxt, c)
+        for s in statics:
+            if s > clock:
+                nxt = min(nxt, s)
+        if nxt == INF:
+            break  # everyone idle and no future event — remaining tasks stuck
+        # accrue each chosen task's work over [clock, nxt); switch happens at nxt
+        for pers, tid in chosen.items():
+            if tid is None:
+                continue
+            w = work_minutes_between(clock, nxt, busy_by_assignee.get(pers, ()))
+            if w <= 0:
+                continue  # [clock, nxt) had no working minutes for this person
+            segments[tid].append((clock, nxt, pers))
+            started.setdefault(tid, clock)
+            remaining[tid] -= w
+            if remaining[tid] <= 1e-6:
+                remaining[tid] = 0
+                done_at[tid] = comp.get(pers, nxt)
+        clock = nxt
 
-        def ready(tid):
-            t = sched[tid]
-            if _primary(t) != a or _earliest(t, sim_start) > t_now:
-                return False
-            for b in t.get("blocked_by", []):
-                if b in done_at:
-                    if done_at[b] > t_now:
-                        return False
-                elif b in sched:
-                    return False  # blocker not finished yet
-            return True
+    return {tid: {"start": started.get(tid), "done_at": done_at.get(tid),
+                  "segments": segments[tid]}
+            for tid in sched}
 
-        avail = [tid for tid in unfinished if ready(tid)]
-        if avail:
-            # urgent first, then priority, then creation order — people
-            # sort their own queue sensibly even with no PM in the world;
-            # the PM's reprioritize overrides (order_*) apply here and
-            # ONLY here (scoring weight stays authored)
-            tid = min(avail, key=lambda x: _work_order_key(sched[x], order[x]))
-            t = sched[tid]
-            remaining = int(round(max(0, t["effort_hours"] - t.get("done_hours", 0)) * 60))
-            end = add_work_minutes(t_now, remaining, busy_by_assignee.get(a, ()))
-            info[tid] = {"start": t_now, "done_at": end}
-            done_at[tid] = end
-            free[a] = end
-            unfinished.discard(tid)
-            waiting.clear()  # a completion may enable someone else
-        else:
-            # advance a's clock to the next enabling moment (arrival/blocker)
-            nxts = []
-            for tid in unfinished:
-                t = sched[tid]
-                if _primary(t) != a:
-                    continue
-                if _earliest(t, sim_start) > t_now:
-                    nxts.append(_earliest(t, sim_start))
-                for b in t.get("blocked_by", []):
-                    if b in done_at and done_at[b] > t_now:
-                        nxts.append(done_at[b])
-            if nxts:
-                free[a] = min(nxts)
-            else:
-                waiting.add(a)  # blocked on another assignee's unfinished work
-    return info
+
+def _accrued_hours(seg_row, sim_start_seed, now, busy_by_assignee):
+    """True hours worked on a task by `now`: seed progress + the fold of its
+    work segments up to `now`."""
+    acc = 0.0
+    for (s, e, pers) in seg_row["segments"]:
+        if s >= now:
+            break
+        acc += work_minutes_between(s, min(e, now), busy_by_assignee.get(pers, ()))
+    return sim_start_seed + acc / 60.0
 
 
 def task_view(tasks, sim_start, now, busy_by_assignee=None):
@@ -202,23 +246,25 @@ def task_view(tasks, sim_start, now, busy_by_assignee=None):
         else:
             s = sched[t["id"]]
             effort, base = t["effort_hours"], t.get("done_hours", 0)
-            if now >= s["done_at"]:
+            done_at = s["done_at"]
+            true_done = _accrued_hours(s, base, now, busy_by_assignee)
+            if done_at is not None and now >= done_at:
                 status, true_done = "done", effort
-            elif now < s["start"]:
-                blocked = any(
-                    b in sched and now < sched[b]["done_at"]
-                    for b in t.get("blocked_by", [])
-                )
-                status, true_done = ("blocked" if blocked else "queued"), base
             else:
-                status = "in_progress"
-                true_done = base + work_minutes_between(
-                    s["start"], now, busy_by_assignee.get(_primary(t), ())) / 60.0
+                # coarse board column (no % / ETA leaked): is a work segment
+                # live at `now` (in_progress), waiting on a blocker (blocked),
+                # or ready-but-behind / not-yet-begun (queued)?
+                active = any(s0 <= now < e0 for (s0, e0, _) in s["segments"])
+                blocked = any(b in sched and (sched[b]["done_at"] is None
+                                              or now < sched[b]["done_at"])
+                              for b in t.get("blocked_by", []))
+                status = ("in_progress" if active
+                          else "blocked" if blocked else "queued")
             row.update(
                 status=status,
                 true_done_hours=round(true_done, 1),
                 pct=int(round(100.0 * true_done / effort)) if effort else 100,
-                projected_done=s["done_at"],
+                projected_done=done_at,
             )
         out.append(row)
     return out
@@ -226,4 +272,5 @@ def task_view(tasks, sim_start, now, busy_by_assignee=None):
 
 def task_done(tasks, sim_start, now, task_id, busy_by_assignee=None):
     sched = compute_schedule(tasks, sim_start, busy_by_assignee or {})
-    return task_id in sched and now >= sched[task_id]["done_at"]
+    s = sched.get(task_id)
+    return s is not None and s["done_at"] is not None and now >= s["done_at"]

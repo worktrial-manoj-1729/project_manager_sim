@@ -176,12 +176,50 @@ def check_harness_drives_to_horizon(scenario):
     return True, "no-op agent driven to %s, queue clean" % fmt(eng.world.clock)
 
 
+def check_preemptive_resume(_scenario):
+    """The preemptive scheduler: person x holds A (P1) and B (P2), both ready
+    at t0, so x works A first. Expedite B at t0+30 working-min (A half-done):
+    A must PAUSE with progress banked, B runs, then A RESUMES and completes
+    (work conserved, split into segments) — and the reprioritize is
+    NON-RETROACTIVE (A's progress before the switch is identical to a run
+    with no reprioritize)."""
+    from .tasks import compute_schedule, task_view
+    START = 540  # Mon 09:00
+
+    def mk(evs=None):
+        b = {"id": "B", "title": "B", "assignees": ["x"], "effort_hours": 1.0,
+             "priority": "P2", "done_hours": 0, "arrival": START}
+        if evs:
+            b["order_events"] = evs
+        return [{"id": "A", "title": "A", "assignees": ["x"], "effort_hours": 1.0,
+                 "priority": "P1", "done_hours": 0, "arrival": START}, b]
+
+    def acc(tasks, tid, now):
+        return next(r["true_done_hours"] for r in task_view(tasks, START, now)
+                    if r["id"] == tid)
+
+    plain, pre = mk(), mk([{"at": 570, "order_urgent": True}])
+    sp = compute_schedule(pre, START)
+    if acc(plain, "A", 560) != acc(pre, "A", 560):
+        return False, "reprioritize at 570 changed A's progress at 560 — RETROACTIVE"
+    if not (acc(pre, "A", 570) == acc(pre, "A", 620) > 0):
+        return False, "A did not hold its banked progress while preempted"
+    da = sp["A"]["done_at"]
+    if da is None or acc(pre, "A", da) < 1.0 - 1e-6:
+        return False, "A did not resume to completion after B"
+    if len(sp["A"]["segments"]) < 2:
+        return False, "A was not split into resume segments"
+    return True, ("A paused at %.0f%%, B ran, A resumed to 100%% (%d segments), "
+                  "non-retroactive" % (acc(pre, "A", 570) * 100, len(sp["A"]["segments"])))
+
+
 CHECKS = [
     ("causality", check_causality),
     ("stops-at-push", check_stops_at_push),
     ("no-push-skipped", check_no_push_skipped),
     ("determinism", check_determinism),
     ("wait-for-reply", check_wait_for_reply),
+    ("preemptive-resume", check_preemptive_resume),
     ("harness-drive", check_harness_drives_to_horizon),
 ]
 
