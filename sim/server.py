@@ -90,13 +90,14 @@ class RunHub:
             ep = os.path.join(d, "events.jsonl")
             sp = os.path.join(d, "scorecard.json")
             key = tuple(os.path.getmtime(p) if os.path.exists(p) else 0
-                        for p in (ep, sp, os.path.join(d, "llm.jsonl")))
+                        for p in (ep, sp, os.path.join(d, "llm.jsonl"),
+                                  os.path.join(d, "meta.json")))
             cached = self._cache.get(rid)
             if cached and cached[0] == key:
                 rec = dict(cached[1])
             else:
                 label, score, completion, efficiency = "", None, None, None
-                probe, task, done_rate, fairness = "", "", None, None
+                probe, task, done_rate, fairness, band = "", "", None, None, None
                 mp = os.path.join(d, "meta.json")
                 if os.path.exists(mp):
                     with open(mp) as f:
@@ -122,13 +123,15 @@ class RunHub:
                         done_rate = sc["done_weight_rate"].get("agent")
                     if isinstance(sc.get("workload_fairness"), dict):
                         fairness = sc["workload_fairness"].get("agent")
+                    if isinstance(sc.get("combined"), dict):
+                        band = sc["combined"].get("available")
                 n = 0
                 if os.path.exists(ep):
                     with open(ep) as f:
                         n = sum(1 for _ in f)
                 cost, tin, tout, turns = self._agent_cost(d)
                 rec = {"id": rid, "label": label or "(interactive/other)",
-                       "probe": probe, "task": task,
+                       "probe": probe, "task": task, "band": band,
                        "events": n, "score": score, "completion": completion,
                        "efficiency": efficiency, "done_rate": done_rate,
                        "fairness": fairness, "cost_usd": cost,
@@ -139,6 +142,43 @@ class RunHub:
                            and rec["score"] is None)
             out.append(rec)
         return out
+
+    def list_tasks(self):
+        """Runs grouped by scenario/task: band, per-model aggregates (LLM
+        probes with a score), and the raw run records (newest first)."""
+        groups = {}
+        for rec in self.list_runs():  # already newest-first
+            groups.setdefault(rec["task"] or "unknown", []).append(rec)
+
+        def mean(recs, field):
+            vals = [r[field] for r in recs if r[field] is not None]
+            return round(sum(vals) / len(vals), 3) if vals else None
+
+        tasks = []
+        for name, recs in groups.items():
+            by_label = {}
+            for r in recs:
+                if r["probe"] == "llm" and r["score"] is not None:
+                    by_label.setdefault(r["label"], []).append(r)
+            models = {}
+            for label, rs in by_label.items():
+                models[label] = {
+                    "n": len(rs),
+                    "mean_score": mean(rs, "score"),
+                    "mean_cost_usd": mean(rs, "cost_usd"),
+                    "mean_efficiency": mean(rs, "efficiency"),
+                    "mean_done_rate": mean(rs, "done_rate"),
+                    "mean_fairness": mean(rs, "fairness"),
+                    "mean_turns": mean(rs, "agent_turns"),
+                    "mean_tokens_out": mean(rs, "tokens_out"),
+                    "runs": [r["id"] for r in rs],
+                }
+            bands = [r["band"] for r in recs if r["band"] is not None]
+            tasks.append({"task": name, "band": max(bands) if bands else None,
+                          "models": models, "runs": recs})
+        tasks.sort(key=lambda t: (t["band"] is None,
+                                  t["band"] if t["band"] is not None else 0))
+        return tasks
 
     def watcher(self, rid):
         rid = os.path.basename(rid or "")
@@ -245,6 +285,10 @@ class Handler(BaseHTTPRequestHandler):
             if HUB is None:
                 return self._json({"error": "not a hub"}, 404)
             self._json({"runs": HUB.list_runs()})
+        elif (url.path == "/api/tasks" and HUB is not None
+              and "run" not in parse_qs(url.query)):
+            # hub aggregate view; ?run=<id> falls through to the per-run board
+            self._json({"tasks": HUB.list_tasks()})
         elif url.path == "/api/meta":
             src = self._src(url.query)
             if src is not None:

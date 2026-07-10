@@ -16,6 +16,8 @@ Probes:
 
 import argparse
 import json
+import os
+
 import anthropic
 
 from .cli import load_env
@@ -253,9 +255,12 @@ def main():
 
     engine = Engine(scenario, verbose=True)
     with open(engine.run_dir + "/meta.json", "w") as f:
+        # task identity = the SCENARIO, not the project: scenario variants
+        # (demo_1/demo/demo_2) share a project id but are different tasks
+        task = os.path.splitext(os.path.basename(args.scenario))[0]
         json.dump({"probe": args.probe,
                    "agent_model": args.model if args.probe == "llm" else "scripted",
-                   "task": (engine.world.scenario.get("project") or {}).get("id", "")},
+                   "task": task},
                   f)
     print("harness probe=%s model=%s run=%s\n" % (args.probe, args.model, engine.run_dir))
 

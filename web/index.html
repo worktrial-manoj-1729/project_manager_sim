@@ -129,14 +129,51 @@
 
   /* ---- Trajectory tab ---- */
   #traj-wrap { position: relative; }
-  #tooltip { position: absolute; display: none; pointer-events: none; z-index: 5;
+  #tooltip, #btooltip { position: absolute; display: none; pointer-events: none; z-index: 5;
              max-width: 340px; background: var(--surface-1); border: 1px solid var(--border);
              border-radius: 8px; padding: 8px 10px; font-size: 12px;
              box-shadow: 0 4px 14px rgba(0,0,0,.12); }
-  #tooltip .tt-when { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  #tooltip .tt-when, #btooltip .tt-when { color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .legend { display: flex; gap: 18px; align-items: center; font-size: 12px;
             color: var(--ink-2); margin-bottom: 10px; flex-wrap: wrap; }
   .legend svg { vertical-align: -3px; }
+  #pm-traj { max-height: 240px; overflow-y: auto; font-size: 13px; }
+  .pm-row { padding: 3px 8px; border-left: 3px solid var(--c-agent); margin: 2px 0; }
+  .pm-row .t { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 6px; }
+  .pm-row.inbound { border-left-color: var(--baseline); color: var(--ink-2); }
+
+  /* ---- Benchmark tab (overview charts + compact task table) ---- */
+  #bench-wrap { position: relative; }
+  #bench-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 880px) { #bench-charts { grid-template-columns: 1fr; } }
+  #bench-filter { font: inherit; font-size: 13px; width: 280px; margin-bottom: 8px;
+                  padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+                  background: var(--surface-1); color: var(--ink-1); }
+  .hard-chip { width: 12px; height: 12px; border-radius: 3px; align-self: center; }
+  .bt-row { display: grid; grid-template-columns: 16px minmax(160px,1.1fr) 60px 50px 2fr 80px;
+            gap: 10px; align-items: center; padding: 6px 4px; font-size: 13px;
+            border-bottom: 1px solid var(--grid); cursor: pointer;
+            font-variant-numeric: tabular-nums; }
+  .bt-row:hover { background: var(--work-band); }
+  .bt-row.head { cursor: default; color: var(--ink-3); font-size: 11px;
+                 text-transform: uppercase; letter-spacing: .05em;
+                 border-bottom: 1px solid var(--baseline); }
+  .bt-row.head:hover { background: none; }
+  .bt-mchips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bt-mchip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+              padding: 1px 7px; border: 1px solid var(--border); border-radius: 9px;
+              color: var(--ink-2); white-space: nowrap; }
+  .bt-mchip .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .bt-detail { padding: 10px 4px 14px; border-bottom: 1px solid var(--grid); }
+  .bench-grid { display: grid; grid-template-columns: minmax(320px,1fr) 400px;
+                gap: 16px; align-items: start; }
+  @media (max-width: 880px) { .bench-grid { grid-template-columns: 1fr; } }
+  .bench-runs-head { font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+  .run-link { display: grid; grid-template-columns: 150px 1fr 70px 70px 60px 70px;
+              gap: 8px; font-size: 12px; padding: 4px 6px; cursor: pointer;
+              border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  .run-link:hover { background: var(--work-band); }
+  .run-link.hl { background: var(--work-band); font-weight: 600; }
 </style>
 </head>
 <body class="viz-root">
@@ -200,6 +237,10 @@
   </section>
 
   <section id="tab-trajectory" class="tab">
+    <div class="panel" style="margin-bottom:14px">
+      <h3>PM trajectory — every agent action, in order (dim rows = pushes the PM received)</h3>
+      <div id="pm-traj"></div>
+    </div>
     <div class="panel">
       <div class="legend" id="traj-legend"></div>
       <div id="traj-wrap">
@@ -211,19 +252,21 @@
 
   <section id="tab-bench" class="tab">
     <div class="panel" style="margin-bottom:14px">
-      <h3>Pareto benchmark — LLM agent runs only (scripted/stub probes excluded); one curve per task</h3>
+      <h3>Overview — per-model MEANS across all tasks (LLM probes only); one line per task+family through its models in capability order, colored by band gap</h3>
       <div class="legend" id="bench-legend"></div>
-      <div id="bench-wrap" style="position:relative">
-        <div id="bench-charts" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"></div>
-        <div id="btooltip" style="position:absolute;display:none;pointer-events:none;z-index:5;max-width:320px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)"></div>
+      <div id="bench-wrap">
+        <div id="bench-charts"></div>
+        <div id="btooltip"></div>
       </div>
     </div>
     <div class="panel">
-      <table>
-        <thead><tr><th>Run</th><th>Task</th><th>Agent</th><th>Score</th><th>Compl</th><th>Eff</th>
-          <th>Done-rate</th><th>Fairness</th><th>Cost $</th><th>Turns</th><th>Tokens in/out</th><th>Status</th></tr></thead>
-        <tbody id="bench-table"></tbody>
-      </table>
+      <h3>Tasks — band ascending; click a row for model means, chart &amp; every run</h3>
+      <input id="bench-filter" type="search" placeholder="filter tasks by name…">
+      <div class="bt-row head">
+        <span></span><span>Task</span><span>Band</span><span>Runs</span>
+        <span>Model means (score)</span><span>Best mean</span>
+      </div>
+      <div id="bench-table"></div>
     </div>
   </section>
 </main>
@@ -256,6 +299,8 @@ async function init() {
       HUBMODE = true;
       RUNS = (await r.json()).runs;
       currentRun = RUNS.length ? RUNS[0].id : null;
+      const want = parseHash().run;           // "#…&run=<id>" wins on load
+      if (want && RUNS.some(r2 => r2.id === want)) currentRun = want;
       $("runs-row").style.display = "flex";
       renderChips();
       setInterval(refreshRuns, 4000);
@@ -269,6 +314,9 @@ async function init() {
   $("people-list").innerHTML = META.npcs.map(n =>
     `<div><span class="chip" style="background:${actorColor[n.id]}"></span><b>${n.name}</b> — ${n.role}</div>`).join("");
   buildLegend();
+  const h0 = parseHash();                     // "#<tab>[&task=…]" restores view
+  if (h0.tab === "bench" && h0.task) BENCH_FOCUS = h0.task;
+  if (h0.tab) activateTab(h0.tab);
   poll(); setInterval(poll, 1200);
 }
 
@@ -294,13 +342,13 @@ function renderChips() {
     const short = r.id.replace("run-", "");
     const sc = r.score != null ? `<span class="sc">${r.score.toFixed(2)}</span>` : "";
     return `<div class="chip-run ${r.id === currentRun ? "sel" : ""}"
-      onclick="loadRun('${r.id}')" title="${r.events} events">
+      onclick="selectRun('${r.id}')" title="${r.events} events">
       <span class="dot ${r.live ? "live" : ""}"></span>
       ${esc(r.label)} · ${short} ${sc}</div>`;
   }).join("");
 }
 
-/* ---------- benchmark: Pareto of cost vs score ---------- */
+/* ---------- benchmark: task-validation cards ---------- */
 function modelColor(label) {
   label = (label || "").toLowerCase();
   if (label.includes("opus")) return "var(--c-agent)";
@@ -312,16 +360,22 @@ function modelColor(label) {
   return "var(--ink-3)";
 }
 
-// one curve per TASK on every chart; points colored by model
-const TASK_COLORS = ["#e4572e", "#2e86ab", "#7b2d8b", "#1b998b", "#b0413e",
-                     "#8d6a3f", "#c179b9", "#4f6d7a"];
-const taskColor = (t, tasks) =>
-  TASK_COLORS[Math.max(0, tasks.indexOf(t)) % TASK_COLORS.length];
+// Task color = HARDNESS on the VIBGYOR spectrum: cards are ordered by their
+// band gap [baseline, OPT] (max combined.available across the task's runs) —
+// violet = narrowest band (least a PM can matter), red = widest (the org
+// fails hardest without one). `tasks` is the band-ascending list of names.
+const VIBGYOR = ["#8f00ff", "#4b0082", "#2e5bff", "#00a651",
+                 "#f5b700", "#ff7f00", "#e4002b"];
+function taskColor(t, tasks) {
+  const i = Math.max(0, tasks.indexOf(t));
+  const n = Math.max(1, tasks.length - 1);
+  return VIBGYOR[Math.round(i * (VIBGYOR.length - 1) / n)];
+}
 
-// model-family trajectories: dashed line per (task, family) through one
-// representative point per model, in capability order — how the family
-// MOVES on a fixed task as capability rises.
-const FAMILY_DASH = {claude: "6 4", openai: "2 3", other: "1 4"};
+// one line per family through per-model MEAN points in capability-tier
+// order — how the family MOVES on a fixed task as capability rises.
+// claude solid; other families get a dash pattern to stay distinguishable.
+const FAMILY_DASH = {claude: "", openai: "6 4", other: "2 3"};
 function modelFamily(label) {
   label = (label || "").toLowerCase();
   if (label.includes("claude")) return "claude";
@@ -335,145 +389,378 @@ function tierOf(label) {
   return i < 0 ? 99 : i;
 }
 
-// the interesting (x, y) pairs. frontier=true draws a per-task staircase
-// (best y at <= x budget); frontier=false connects per-task points by x.
-const CHARTS = [
-  {x: "cost_usd",    y: "score",      xl: "agent cost per run (USD)", yl: "SCORE (0=baseline, 1=OPT)", fmt: v => "$" + v.toFixed(2), frontier: true},
-  {x: "cost_usd",    y: "efficiency", xl: "agent cost per run (USD)", yl: "EFFICIENCY (normalized)",   fmt: v => "$" + v.toFixed(2), frontier: true},
-  {x: "cost_usd",    y: "done_rate",  xl: "agent cost per run (USD)", yl: "DONE-RATE W(done)/W(all)",  fmt: v => "$" + v.toFixed(2), frontier: true},
-  {x: "agent_turns", y: "score",      xl: "agent turns used",         yl: "SCORE (0=baseline, 1=OPT)", fmt: v => v.toFixed(0),       frontier: true},
-  {x: "tokens_out",  y: "score",      xl: "agent output tokens",      yl: "SCORE (0=baseline, 1=OPT)", fmt: v => (v/1000).toFixed(1) + "k", frontier: true},
-  {x: "fairness",    y: "score",      xl: "workload fairness (1−σ utilization)", yl: "SCORE (0=baseline, 1=OPT)", fmt: v => v.toFixed(2), frontier: false},
+let BENCH_TASKS = [];   // contract-shaped task recs, band ascending
+const BENCH_OPEN = {};  // task -> {open: bool, model: label|null} detail state
+let BENCH_FILTER = ""; // task-name substring filter (lowercased)
+let BENCH_FOCUS = null; // task from "#benchmark&task=…" to expand + scroll to
+
+// GET /api/tasks with no ?run= is the hub's task-validation aggregate
+// (see contract in server.py). Older servers answer with the per-run
+// project board ({project, tasks}) or 404 — in both cases fall back to
+// aggregating /api/runs client-side into the same shape.
+async function fetchBenchTasks() {
+  try {
+    const r = await fetch("/api/tasks");
+    if (r.ok) {
+      const j = await r.json();
+      if (Array.isArray(j.tasks) && !("project" in j) &&
+          j.tasks.every(t => t && typeof t === "object" && "models" in t))
+        return j.tasks;
+    }
+  } catch (e) {}
+  return aggregateTasks(RUNS);
+}
+
+function aggregateTasks(runs) {
+  const byTask = {};
+  for (const r of runs) {                     // /api/runs is newest first
+    const t = r.task || "?";
+    const rec = byTask[t] = byTask[t] || {task: t, band: null, models: {}, runs: []};
+    rec.runs.push(r);
+    if (r.band != null) rec.band = Math.max(rec.band ?? -Infinity, r.band);
+  }
+  for (const rec of Object.values(byTask)) {
+    const byModel = {};                       // scored LLM probe runs ONLY
+    for (const r of rec.runs)
+      if (r.probe === "llm" && r.score != null)
+        (byModel[r.label] = byModel[r.label] || []).push(r);
+    for (const [label, rs] of Object.entries(byModel)) {
+      const mean = k => {
+        const vs = rs.map(r => r[k]).filter(v => v != null);
+        return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+      };
+      rec.models[label] = {
+        n: rs.length, mean_score: mean("score"), mean_cost_usd: mean("cost_usd"),
+        mean_efficiency: mean("efficiency"), mean_done_rate: mean("done_rate"),
+        mean_fairness: mean("fairness"), mean_turns: mean("agent_turns"),
+        mean_tokens_out: mean("tokens_out"), runs: rs.map(r => r.id),
+      };
+    }
+  }
+  // easy -> hard by band gap, tasks with no scorecard yet last
+  return Object.values(byTask).sort((a, b) =>
+    (a.band == null) - (b.band == null) || (a.band || 0) - (b.band || 0));
+}
+
+async function renderBench() {
+  BENCH_TASKS = await fetchBenchTasks();
+  if (BENCH_FOCUS != null && BENCH_TASKS.some(t => t.task === BENCH_FOCUS)) {
+    const cur = BENCH_OPEN[BENCH_FOCUS] || {};
+    BENCH_OPEN[BENCH_FOCUS] = {open: true, model: cur.model};
+  }
+  renderBenchOverview();
+  renderBenchTable();
+  if (BENCH_FOCUS != null) { scrollToBenchRow(BENCH_FOCUS); BENCH_FOCUS = null; }
+}
+
+const fnum = (v, d = 2, pre = "") => v == null ? "—" : pre + v.toFixed(d);
+
+function taskModels(rec) {          // per-model MEANS, capability-tier order
+  return Object.entries(rec.models)
+    .map(([label, m]) => ({label, ...m}))
+    .sort((a, b) => tierOf(a.label) - tierOf(b.label) || (a.label < b.label ? -1 : 1));
+}
+
+function labelShort(l) {
+  const m = String(l || "").toLowerCase()
+    .match(/haiku|sonnet|opus|fable|mini|gpt-?[\w.]+|o\d[\w-]*/);
+  if (m) return m[0];
+  l = String(l || "");
+  return l.length > 12 ? l.slice(0, 12) + "…" : l;
+}
+
+/* ---- section 1: cross-task overview (2x2, shared axes) ---- */
+const OV_CHARTS = [
+  {x: "mean_cost_usd", y: "mean_score",     ymin: -0.3, title: "mean score vs mean cost (USD)",          fmt: v => "$" + v.toFixed(2)},
+  {x: "mean_turns",    y: "mean_score",     ymin: -0.3, title: "mean score vs mean agent turns",         fmt: v => String(Math.round(v))},
+  {x: "mean_fairness", y: "mean_score",     ymin: -0.3, title: "mean score vs mean workload fairness",   fmt: v => v.toFixed(2)},
+  {x: "mean_cost_usd", y: "mean_done_rate", ymin: 0,    title: "mean done-rate vs mean cost (USD)",      fmt: v => "$" + v.toFixed(2)},
 ];
 
-function renderBench() {
+function renderBenchOverview() {
   const host = $("bench-charts");
   if (!host) return;
-  // LLM agent runs ONLY: no scripted probe, no stub/zero-turn runs
-  // (baseline and OPT are the axis anchors 0 and 1, never points)
-  const pts = RUNS.filter(r =>
-    r.probe === "llm" && r.score != null && (r.agent_turns || 0) > 0);
-  const tasks = [...new Set(pts.map(p => p.task || "?"))];
-
+  const labels = [...new Set(BENCH_TASKS.flatMap(t => Object.keys(t.models)))]
+    .sort((a, b) => tierOf(a) - tierOf(b));
   $("bench-legend").innerHTML =
-    [...new Set(pts.map(p => p.label))].map(l =>
+    labels.map(l =>
       `<span><svg width="14" height="12"><circle cx="7" cy="6" r="5" fill="${modelColor(l)}"/></svg> ${esc(l)}</span>`).join("") +
-    tasks.map(t =>
-      `<span><svg width="22" height="12"><line x1="1" y1="6" x2="21" y2="6" stroke="${taskColor(t, tasks)}" stroke-width="2.5"/></svg> task: ${esc(t)}</span>`).join("") +
-    `<span><svg width="26" height="12"><line x1="1" y1="6" x2="25" y2="6" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="6 4"/></svg> model family, low→high tier</span>`;
-
-  if (host.children.length !== CHARTS.length)
-    host.innerHTML = CHARTS.map((c, i) =>
-      `<svg id="bch-${i}" width="100%" height="250"></svg>`).join("");
-  CHARTS.forEach((c, i) => drawBenchChart($("bch-" + i), c, pts, tasks));
-
-  $("bench-table").innerHTML = RUNS.map(r => `<tr>
-    <td class="t">${r.id.replace("run-","")}</td><td class="t">${esc(r.task || "—")}</td>
-    <td>${esc(r.label)}</td>
-    <td class="t">${r.score != null ? r.score.toFixed(3) : "—"}</td>
-    <td class="t">${r.completion != null ? r.completion.toFixed(3) : "—"}</td>
-    <td class="t">${r.efficiency != null ? r.efficiency.toFixed(3) : "—"}</td>
-    <td class="t">${r.done_rate != null ? r.done_rate.toFixed(2) : "—"}</td>
-    <td class="t">${r.fairness != null ? r.fairness.toFixed(2) : "—"}</td>
-    <td class="t">${r.cost_usd != null ? "$" + r.cost_usd.toFixed(3) : "—"}</td>
-    <td class="t">${r.agent_turns || "—"}</td>
-    <td class="t">${r.tokens_in ? r.tokens_in + " / " + r.tokens_out : "—"}</td>
-    <td>${r.live ? "🟢 live" : (r.score != null ? "final" : "idle")}</td></tr>`).join("");
+    `<span><svg width="76" height="12"><defs><linearGradient id="bench-grad">${
+        VIBGYOR.map((c, i) => `<stop offset="${Math.round(i * 100 / (VIBGYOR.length - 1))}%" stop-color="${c}"/>`).join("")
+      }</linearGradient></defs><rect x="1" y="2" width="74" height="8" rx="2" fill="url(#bench-grad)"/></svg> band gap: easy → hard</span>` +
+    `<span style="opacity:.7">hover a line → that task in all charts; click → its row below</span>`;
+  host.innerHTML = OV_CHARTS.map(cfg => ovChartSVG(cfg)).join("");
 }
 
-function drawBenchChart(svg, cfg, allPts, tasks) {
-  if (!svg) return;
-  const pts = allPts.filter(p => p[cfg.x] != null && p[cfg.y] != null);
-  const W = svg.clientWidth || 440, H = 250, mL = 46, mR = 12, mT = 24, mB = 34;
-  let g = `<text x="${mL}" y="14" font-size="11" font-weight="600" fill="var(--ink-2)">${cfg.yl} vs ${cfg.xl}</text>`;
-  if (!pts.length) {
-    svg.innerHTML = g + `<text x="${W/2}" y="${H/2}" font-size="11" text-anchor="middle" fill="var(--ink-3)">no LLM runs with this metric yet</text>`;
-    return;
-  }
-  const xmax = Math.max(1e-9, ...pts.map(p => p[cfg.x])) * 1.15;
-  const ymin = Math.min(0, ...pts.map(p => p[cfg.y]));
+// one svg of the 2x2 grid: every task's per-model MEAN points, one polyline
+// per task+family in capability-tier order, colored by VIBGYOR band rank.
+// Shared axes across ALL tasks so charts are comparable at 100+ tasks.
+function ovChartSVG(cfg) {
+  const W = 460, H = 240, mL = 42, mR = 14, mT = 14, mB = 30;
+  const YMIN = cfg.ymin, YMAX = 1.05;
+  const names = BENCH_TASKS.map(t => t.task);
+  const showLabels = BENCH_TASKS.length <= 8;   // per-line labels don't scale
+  let xmax = 0.01, any = false;
+  for (const rec of BENCH_TASKS)
+    for (const m of Object.values(rec.models))
+      if (m[cfg.x] != null && m[cfg.y] != null) { xmax = Math.max(xmax, m[cfg.x]); any = true; }
+  xmax *= 1.15;
   const X = v => mL + v / xmax * (W - mL - mR);
-  const Y = v => mT + (1 - (v - ymin) / (1.05 - ymin)) * (H - mT - mB);
-
-  for (let yt = 0; yt <= 1.001; yt += 0.25)
-    g += `<line x1="${mL}" y1="${Y(yt)}" x2="${W-mR}" y2="${Y(yt)}" stroke="var(--grid)"/>
-          <text x="${mL-6}" y="${Y(yt)+3}" font-size="9" text-anchor="end" fill="var(--ink-3)">${yt.toFixed(2)}</text>`;
-  g += `<line x1="${mL}" y1="${Y(1)}" x2="${W-mR}" y2="${Y(1)}" stroke="var(--baseline)" stroke-dasharray="2 3"/>`;
-  for (let i = 0; i <= 4; i++) {
-    const v = xmax / 4 * i;
-    g += `<text x="${X(v)}" y="${H-16}" font-size="9" text-anchor="middle" fill="var(--ink-3)">${cfg.fmt(v)}</text>`;
+  const Y = v => mT + (1 - (Math.max(YMIN, Math.min(YMAX, v)) - YMIN) / (YMAX - YMIN)) * (H - mT - mB);
+  let g = "";
+  for (const yt of (YMIN < 0 ? [-0.25, 0.25, 0.5, 0.75] : [0.25, 0.5, 0.75]))
+    g += `<line x1="${mL}" y1="${Y(yt)}" x2="${W-mR}" y2="${Y(yt)}" stroke="var(--grid)"/>`;
+  g += `<line x1="${mL}" y1="${Y(0)}" x2="${W-mR}" y2="${Y(0)}" stroke="var(--baseline)"/>
+        <text x="${W-mR}" y="${Y(0)-4}" font-size="9" text-anchor="end" fill="var(--ink-3)">baseline</text>
+        <line x1="${mL}" y1="${Y(1)}" x2="${W-mR}" y2="${Y(1)}" stroke="var(--baseline)" stroke-dasharray="2 3"/>
+        <text x="${W-mR}" y="${Y(1)-4}" font-size="9" text-anchor="end" fill="var(--ink-3)">OPT</text>`;
+  for (const yt of [0, 0.5, 1])
+    g += `<text x="${mL-5}" y="${Y(yt)+3}" font-size="9" text-anchor="end" fill="var(--ink-3)">${yt.toFixed(1)}</text>`;
+  for (let i = 0; i <= 3; i++) {
+    const v = xmax / 3 * i;
+    g += `<text x="${X(v)}" y="${H-14}" font-size="9" text-anchor="middle" fill="var(--ink-3)">${cfg.fmt(v)}</text>`;
   }
-  g += `<text x="${(mL+W-mR)/2}" y="${H-3}" font-size="10" text-anchor="middle" fill="var(--ink-2)">${cfg.xl}</text>`;
-
-  // one curve per task
-  for (const t of tasks) {
-    const mine = pts.filter(p => (p.task || "?") === t)
-                    .sort((a, b) => a[cfg.x] - b[cfg.x]);
-    if (!mine.length) continue;
-    const color = taskColor(t, tasks);
-    let curve = [], best = -Infinity;
-    if (cfg.frontier) {                       // staircase: best y at <= x
-      for (const p of mine) if (p[cfg.y] > best) { best = p[cfg.y]; curve.push(p); }
-    } else {
-      curve = mine;                           // plain x-ordered polyline
-    }
-    let path = "";
-    curve.forEach((p, i) => {
-      const x = X(p[cfg.x]), y = Y(p[cfg.y]);
-      path += i === 0 ? `M ${x} ${y}`
-            : (cfg.frontier ? ` H ${x} V ${y}` : ` L ${x} ${y}`);
-    });
-    if (cfg.frontier && curve.length) path += ` H ${W-mR}`;
-    g += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" opacity=".75"/>`;
-    const last = curve[curve.length - 1];
-    g += `<text x="${Math.min(X(last[cfg.x]) + 6, W - 70)}" y="${Y(last[cfg.y]) - 7}"
-           font-size="10" font-weight="600" fill="${color}">${esc(t)}</text>`;
-  }
-
-  // family movement: same task, same family, models in capability order
-  for (const t of tasks) {
+  g += `<text x="${(mL+W-mR)/2}" y="${H-2}" font-size="10" text-anchor="middle" fill="var(--ink-2)">${cfg.title}</text>`;
+  if (!any)
+    return `<svg width="100%" viewBox="0 0 ${W} ${H}">${g}<text x="${(mL+W-mR)/2}" y="${(mT+H-mB)/2}"
+      font-size="11" text-anchor="middle" fill="var(--ink-3)">no scored LLM runs to chart</text></svg>`;
+  let marks = "", ends = "", hits = "";
+  for (const rec of BENCH_TASKS) {
+    const color = taskColor(rec.task, names);
+    const pts = taskModels(rec).filter(m => m[cfg.x] != null && m[cfg.y] != null);
+    if (!pts.length) continue;
+    const ta = escAttr(rec.task);
     const byFam = {};
-    for (const p of pts.filter(p => (p.task || "?") === t)) {
-      const f = modelFamily(p.label);
-      byFam[f] = byFam[f] || {};
-      const cur = byFam[f][p.label];   // best run represents the model
-      if (!cur || (p[cfg.y] ?? -1e9) > (cur[cfg.y] ?? -1e9))
-        byFam[f][p.label] = p;
+    for (const m of pts)
+      (byFam[modelFamily(m.label)] = byFam[modelFamily(m.label)] || []).push(m);
+    for (const [fam, ms] of Object.entries(byFam)) {
+      const d = ms.map((m, i) => `${i ? "L" : "M"} ${X(m[cfg.x])} ${Y(m[cfg.y])}`).join(" ");
+      if (ms.length > 1) {
+        marks += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.5"
+          stroke-dasharray="${FAMILY_DASH[fam] || ""}" opacity=".65" data-bt-vis="${ta}"/>`;
+        hits += `<path d="${d}" fill="none" stroke="transparent" stroke-width="10"
+          style="cursor:pointer" data-bt-task="${ta}"/>`;
+      }
+      for (const m of ms) {
+        const x = X(m[cfg.x]), y = Y(m[cfg.y]);
+        marks += `<circle cx="${x}" cy="${y}" r="3.5" fill="${modelColor(m.label)}"
+          stroke="${color}" stroke-width="1" opacity=".85" data-bt-vis="${ta}"/>`;
+        hits += `<circle cx="${x}" cy="${y}" r="8" fill="transparent"
+          style="cursor:pointer" data-bt-task="${ta}"/>`;
+      }
     }
-    for (const [f, models] of Object.entries(byFam)) {
-      const reps = Object.values(models)
-        .sort((a, b) => tierOf(a.label) - tierOf(b.label));
-      if (reps.length < 2) continue;
-      const path = reps.map((p, i) =>
-        `${i ? "L" : "M"} ${X(p[cfg.x])} ${Y(p[cfg.y])}`).join(" ");
-      g += `<path d="${path}" fill="none" stroke="${taskColor(t, tasks)}"
-            stroke-width="1.5" stroke-dasharray="${FAMILY_DASH[f] || "3 3"}"
-            opacity=".85"/>`;
-      const last = reps[reps.length - 1];   // arrowhead: direction of scale
-      g += `<circle cx="${X(last[cfg.x])}" cy="${Y(last[cfg.y])}" r="8"
-            fill="none" stroke="${taskColor(t, tasks)}" stroke-width="1"
-            stroke-dasharray="2 2" opacity=".7"/>`;
+    if (showLabels) {
+      const end = pts[pts.length - 1];   // highest-tier point = line end
+      ends += `<text x="${X(end[cfg.x]) + 6}" y="${Y(end[cfg.y]) + 3}" font-size="9"
+        fill="${color}" opacity=".85" data-bt-vis="${ta}">${esc(rec.task)}</text>`;
     }
   }
-
-  let hits = "";
-  pts.forEach(p => {
-    const x = X(p[cfg.x]), y = Y(p[cfg.y]);
-    g += `<circle cx="${x}" cy="${y}" r="5" fill="${modelColor(p.label)}"
-          stroke="${taskColor(p.task || "?", tasks)}" stroke-width="1.5"/>`;
-    hits += `<circle cx="${x}" cy="${y}" r="12" fill="transparent" style="cursor:pointer"
-      onmousemove="showBTip(event,this)" onmouseleave="hideBTip()"
-      data-tip="<b>${esc(p.label)}</b> on <b>${esc(p.task || "?")}</b><br>score ${p.score} (compl ${p.completion} / eff ${p.efficiency})<br>done-rate ${p.done_rate ?? "—"} · fairness ${p.fairness ?? "—"}<br>$${p.cost_usd} · ${p.agent_turns} turns · ${p.tokens_in}/${p.tokens_out} tok<br>${p.id}"/>`;
-  });
-  svg.innerHTML = g + hits;
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}">${g}${marks}${ends}${hits}</svg>`;
 }
-function showBTip(ev, el) {
-  const tip = $("btooltip"), wrap = $("bench-wrap").getBoundingClientRect();
-  tip.innerHTML = el.dataset.tip; tip.style.display = "block";
-  tip.style.left = Math.min(ev.clientX - wrap.left + 14, wrap.width - 280) + "px";
+
+// hover a task's line/point → tooltip + highlight that task in ALL charts
+function showBTip(ev, task) {
+  const rec = BENCH_TASKS.find(t => t.task === task);
+  const tip = $("btooltip");
+  if (!rec || !tip) return;
+  tip.innerHTML =
+    `<b>${esc(rec.task)}</b> <span class="tt-when">band ${rec.band != null ? rec.band.toFixed(2) : "—"}</span>` +
+    taskModels(rec).map(m => `<div><span class="chip" style="background:${modelColor(m.label)};border-radius:50%"></span>${
+      esc(m.label)} — score ${fnum(m.mean_score, 3)}, done ${fnum(m.mean_done_rate)}, fair ${fnum(m.mean_fairness)}, ${
+      fnum(m.mean_cost_usd, 2, "$")}, ${m.mean_turns == null ? "—" : Math.round(m.mean_turns)} turns (n=${m.n})</div>`).join("") +
+    `<div class="tt-when">click → this task's row below</div>`;
+  tip.style.display = "block";
+  const wrap = $("bench-wrap").getBoundingClientRect();
+  tip.style.left = Math.min(ev.clientX - wrap.left + 14, wrap.width - 320) + "px";
   tip.style.top = (ev.clientY - wrap.top + 14) + "px";
 }
-function hideBTip() { $("btooltip").style.display = "none"; }
+function hideBTip() { const t = $("btooltip"); if (t) t.style.display = "none"; }
+function benchHL(task) {
+  document.querySelectorAll("#bench-charts [data-bt-vis]").forEach(el =>
+    el.style.opacity = task == null ? "" : (el.dataset.btVis === task ? "1" : ".15"));
+}
+$("bench-charts").addEventListener("mousemove", ev => {
+  const el = ev.target.closest("[data-bt-task]");
+  if (el) { showBTip(ev, el.dataset.btTask); benchHL(el.dataset.btTask); }
+  else { hideBTip(); benchHL(null); }
+});
+$("bench-charts").addEventListener("mouseleave", () => { hideBTip(); benchHL(null); });
+
+/* ---- section 2: one compact row per task, expandable detail ---- */
+function renderBenchTable() {
+  const host = $("bench-table");
+  if (!host) return;
+  const names = BENCH_TASKS.map(t => t.task);
+  const q = BENCH_FILTER;
+  const rows = BENCH_TASKS
+    .filter(rec => !q || rec.task.toLowerCase().includes(q))
+    .map(rec => {
+      const models = taskModels(rec);
+      const scores = models.map(m => m.mean_score).filter(v => v != null);
+      const best = scores.length ? Math.max(...scores) : null;
+      const chips = models.map(m =>
+        `<span class="bt-mchip"><span class="dot" style="background:${modelColor(m.label)}"></span>${
+          esc(labelShort(m.label))} ${fnum(m.mean_score, 2)}</span>`).join("") ||
+        `<span style="color:var(--ink-3);font-size:12px">no LLM probes yet</span>`;
+      const open = (BENCH_OPEN[rec.task] || {}).open;
+      return `<div class="bt-row" data-bt-row="${escAttr(rec.task)}" title="click for details">
+        <span class="hard-chip" style="background:${taskColor(rec.task, names)}"></span>
+        <b>${open ? "▾ " : ""}${esc(rec.task)}</b>
+        <span>${rec.band != null ? rec.band.toFixed(2) : "—"}</span>
+        <span>${rec.runs.length}</span>
+        <div class="bt-mchips">${chips}</div>
+        <span>${best == null ? "—" : best.toFixed(3)}</span>
+      </div>${open ? benchDetail(rec, names) : ""}`;
+    });
+  host.innerHTML = rows.join("") ||
+    `<div style="color:var(--ink-3);font-size:13px;padding:8px 4px">${
+      q ? "no tasks match the filter" : "no benchmark runs yet"}</div>`;
+}
+
+// expanded detail = the old card body: means table + mini chart + run list
+function benchDetail(rec, names) {
+  const color = taskColor(rec.task, names);
+  const open = BENCH_OPEN[rec.task] || {};
+  const models = taskModels(rec);
+  // per-model MEANS over repeats — never raw per-run rows here
+  const tbl = models.length ? `<table>
+    <thead><tr><th>Model (means)</th><th>n</th><th>Score</th><th>Done-rate</th>
+      <th>Fairness</th><th>Cost $</th><th>Turns</th></tr></thead>
+    <tbody>${models.map(m => `<tr>
+      <td><span class="chip" style="background:${modelColor(m.label)};border-radius:50%"></span>${esc(m.label)}</td>
+      <td class="t">${m.n}</td>
+      <td class="t">${fnum(m.mean_score, 3)}</td>
+      <td class="t">${fnum(m.mean_done_rate)}</td>
+      <td class="t">${fnum(m.mean_fairness)}</td>
+      <td class="t">${fnum(m.mean_cost_usd, 2, "$")}</td>
+      <td class="t">${m.mean_turns == null ? "—" : Math.round(m.mean_turns)}</td>
+    </tr>`).join("")}</tbody></table>`
+    : `<div style="color:var(--ink-3);font-size:13px">no LLM probe runs on this task yet</div>`;
+  const runRows = rec.runs.map(r => `
+    <div class="run-link ${open.model && r.label === open.model ? "hl" : ""}"
+      data-run="${escAttr(r.id)}" title="open this run's trajectory">
+      <span>${esc(r.id.replace("run-", ""))}</span><span>${esc(r.label)}</span>
+      <span>${r.score != null ? r.score.toFixed(3) : "—"}</span>
+      <span>${r.cost_usd != null ? "$" + r.cost_usd.toFixed(2) : "—"}</span>
+      <span>${r.agent_turns || "—"}</span>
+      <span>${r.live ? "🟢 live" : (r.score != null ? "final" : "idle")}</span>
+    </div>`).join("");
+  return `<div class="bt-detail">
+    <div class="bench-grid">
+      <div>${tbl}</div>
+      <div>${benchChartSVG(rec, color, models)}</div>
+    </div>
+    <div class="bench-runs-head">
+      runs (${rec.runs.length}) — every run incl. scripted, newest first; click a chart point to highlight that model's runs; click a run to open its trajectory</div>
+    <div>${runRows || '<div style="color:var(--ink-3);font-size:12px">(none)</div>'}</div>
+  </div>`;
+}
+
+// expand + scroll to a task's row (overview click / "#benchmark&task=…")
+function gotoBenchTask(task) {
+  if (BENCH_FILTER && !task.toLowerCase().includes(BENCH_FILTER)) {
+    BENCH_FILTER = ""; const f = $("bench-filter"); if (f) f.value = "";
+  }
+  const cur = BENCH_OPEN[task] || {};
+  BENCH_OPEN[task] = {open: true, model: cur.model};
+  renderBenchTable();
+  setBenchTaskHash(task);
+  scrollToBenchRow(task);
+}
+
+// replaceState so the URL is shareable without re-triggering applyHash
+function setBenchTaskHash(task) {
+  let h = "#benchmark";
+  if (HUBMODE && currentRun) h += "&run=" + currentRun;
+  if (task) h += "&task=" + encodeURIComponent(task);
+  history.replaceState(null, "", h);
+}
+
+function scrollToBenchRow(task) {
+  for (const el of document.querySelectorAll("[data-bt-row]"))
+    if (el.dataset.btRow === task) {
+      el.scrollIntoView({behavior: "smooth", block: "center"});
+      break;
+    }
+}
+
+$("bench-filter").addEventListener("input", ev => {
+  BENCH_FILTER = ev.target.value.trim().toLowerCase();
+  renderBenchTable();
+});
+
+// mini chart: mean score (y) vs mean cost (x), ONE point per model, lines
+// per family in capability-tier order. Fixed y -0.3..1.05 with OPT/baseline.
+function benchChartSVG(rec, color, models) {
+  const W = 380, H = 200, mL = 42, mR = 12, mT = 12, mB = 28;
+  const YMIN = -0.3, YMAX = 1.05;
+  const pts = models.filter(m => m.mean_score != null && m.mean_cost_usd != null);
+  if (!pts.length)
+    return `<svg width="${W}" height="${H}"><text x="${W/2}" y="${H/2}" font-size="11"
+      text-anchor="middle" fill="var(--ink-3)">no scored LLM runs to chart</text></svg>`;
+  const xmax = Math.max(0.01, ...pts.map(m => m.mean_cost_usd)) * 1.15;
+  const X = v => mL + v / xmax * (W - mL - mR);
+  const Y = v => mT + (1 - (Math.max(YMIN, Math.min(YMAX, v)) - YMIN) / (YMAX - YMIN)) * (H - mT - mB);
+  let g = "";
+  for (const yt of [-0.25, 0.25, 0.5, 0.75])
+    g += `<line x1="${mL}" y1="${Y(yt)}" x2="${W-mR}" y2="${Y(yt)}" stroke="var(--grid)"/>`;
+  g += `<line x1="${mL}" y1="${Y(0)}" x2="${W-mR}" y2="${Y(0)}" stroke="var(--baseline)"/>
+        <text x="${W-mR}" y="${Y(0)-4}" font-size="9" text-anchor="end" fill="var(--ink-3)">baseline</text>
+        <line x1="${mL}" y1="${Y(1)}" x2="${W-mR}" y2="${Y(1)}" stroke="var(--baseline)" stroke-dasharray="2 3"/>
+        <text x="${W-mR}" y="${Y(1)-4}" font-size="9" text-anchor="end" fill="var(--ink-3)">OPT</text>`;
+  for (const yt of [0, 0.5, 1])
+    g += `<text x="${mL-5}" y="${Y(yt)+3}" font-size="9" text-anchor="end" fill="var(--ink-3)">${yt.toFixed(1)}</text>`;
+  for (let i = 0; i <= 3; i++) {
+    const v = xmax / 3 * i;
+    g += `<text x="${X(v)}" y="${H-14}" font-size="9" text-anchor="middle" fill="var(--ink-3)">$${v.toFixed(2)}</text>`;
+  }
+  g += `<text x="${(mL+W-mR)/2}" y="${H-2}" font-size="10" text-anchor="middle" fill="var(--ink-2)">mean score vs mean cost (USD)</text>`;
+  const byFam = {};
+  for (const m of pts)
+    (byFam[modelFamily(m.label)] = byFam[modelFamily(m.label)] || []).push(m);
+  let dots = "";
+  for (const [fam, ms] of Object.entries(byFam)) {
+    ms.sort((a, b) => tierOf(a.label) - tierOf(b.label));
+    if (ms.length > 1)
+      g += `<path d="${ms.map((m, i) =>
+            `${i ? "L" : "M"} ${X(m.mean_cost_usd)} ${Y(m.mean_score)}`).join(" ")}"
+            fill="none" stroke="${color}" stroke-width="2"
+            stroke-dasharray="${FAMILY_DASH[fam] || ""}" opacity=".85"/>`;
+    for (const m of ms) {
+      const x = X(m.mean_cost_usd), y = Y(m.mean_score);
+      dots += `<circle cx="${x}" cy="${y}" r="5.5" fill="${modelColor(m.label)}"
+          stroke="${color}" stroke-width="1.5"/>
+        <circle cx="${x}" cy="${y}" r="11" fill="transparent" style="cursor:pointer"
+          data-pt-task="${escAttr(rec.task)}" data-pt-model="${escAttr(m.label)}">
+          <title>${esc(m.label)} — mean of ${m.n} run${m.n > 1 ? "s" : ""}: score ${m.mean_score.toFixed(3)}, $${m.mean_cost_usd.toFixed(2)} — click for runs</title>
+        </circle>`;
+    }
+  }
+  return `<svg width="${W}" height="${H}">${g}${dots}</svg>`;
+}
+
+// benchmark interactions (delegated — table rows are re-rendered wholesale):
+// run row -> jump to trajectory; mini-chart point -> highlight that model's
+// runs; overview line/point -> expand + scroll to the task's row; table row
+// -> toggle its detail block (and mirror the state into the hash).
+document.addEventListener("click", ev => {
+  const run = ev.target.closest("[data-run]");
+  if (run) { location.hash = "#trajectory&run=" + run.dataset.run; return; }
+  const pt = ev.target.closest("[data-pt-task]");
+  if (pt) {
+    BENCH_OPEN[pt.dataset.ptTask] = {open: true, model: pt.dataset.ptModel};
+    renderBenchTable(); return;
+  }
+  const ov = ev.target.closest("[data-bt-task]");
+  if (ov) { gotoBenchTask(ov.dataset.btTask); return; }
+  const row = ev.target.closest("[data-bt-row]");
+  if (row) {
+    const t = row.dataset.btRow, cur = BENCH_OPEN[t] || {};
+    BENCH_OPEN[t] = {open: !cur.open, model: cur.model};
+    renderBenchTable();
+    setBenchTaskHash(BENCH_OPEN[t].open ? t : null);
+  }
+});
 
 async function poll() {
   const s = await (await fetch(api("/api/events?since=" + EVENTS.length))).json();
@@ -527,7 +814,8 @@ function render() {
     $("scrub-label").textContent = "at latest event"; }
   else { badge.textContent = "REWIND"; badge.className = "rewind";
     $("scrub-label").textContent = `event #${cursor} — ${fmt(viewClock())}`; }
-  renderChat(); renderPending(); renderDocs(); renderTimeline(); renderTrajectory();
+  renderChat(); renderPending(); renderDocs(); renderTimeline();
+  renderPmTraj(); renderTrajectory();
 }
 
 // Delivery badge: how the signal travels on each side (stamped by the
@@ -632,7 +920,42 @@ function renderTimeline() {
   $("timeline-body").innerHTML = rows.reverse().join("");
 }
 
-/* ---------- trajectory (SVG swimlanes) ---------- */
+/* ---------- trajectory (PM action list + SVG swimlanes) ---------- */
+// chronological list of everything the PM DID (and every push it received),
+// derived from the same already-fetched event log the swimlanes draw from.
+function renderPmTraj() {
+  const el = $("pm-traj");
+  if (!el) return;
+  const short = id => (actorName[id] || id || "?").split(" ")[0];
+  const clip = s => esc(String(s).length > 110 ? String(s).slice(0, 110) + "…" : s);
+  const rows = [];
+  const row = (t, html, inbound) => rows.push(
+    `<div class="pm-row${inbound ? " inbound" : ""}"><span class="t">[${fmt(t)}]</span>${html}</div>`);
+  for (const e of view()) {
+    if (e.kind === "message" && e.sender === "agent")
+      row(e.t, `${e.via === "email" ? "✉" : "💬"} → <b>${short(e.recipient)}</b>: ${clip(e.text)}`);
+    else if (e.kind === "message" && e.recipient === "agent")
+      row(e.t, `${e.via === "email" ? "✉" : "💬"} from <b>${short(e.sender)}</b>: ${clip(e.text)}`, true);
+    else if (e.kind === "email_delivered")
+      row(e.t, `📬 email from <b>${short(e.sender)}</b> lands in inbox: ${clip(e.text || "")}`, true);
+    else if (e.kind === "task_added" && e.source === "agent")
+      row(e.t, `🎫 filed ticket: <b>${esc(e.task.title)}</b>`);
+    else if (e.kind === "task_updated" && e.source === "agent") {
+      const c = e.changes || {};
+      if (c.filed) row(e.t, `🎫 filed ticket <b>${esc(e.task_id)}</b> on the board`);
+      if (c.assignees) row(e.t, `👤 assigned <b>${esc(e.task_id)}</b> → ${c.assignees.map(short).join(", ")}`);
+      if (!c.filed && !c.assignees)
+        row(e.t, `✏️ updated <b>${esc(e.task_id)}</b>: ${clip(JSON.stringify(c))}`);
+    }
+    else if (e.kind === "meeting_scheduled")
+      row(e.t, `📅 scheduled <b>${esc(e.topic)}</b> ${fmt(e.start)}–${fmt(e.end)} (${e.attendees.map(short).join(", ")})`);
+    else if (e.kind === "doc_added")
+      row(e.t, `📄 shared doc <b>${esc(e.title)}</b> → ${e.shared_with.map(short).join(", ")}`);
+  }
+  el.innerHTML = rows.join("") ||
+    `<div style="color:var(--ink-3);font-size:13px">(no PM activity yet)</div>`;
+}
+
 function buildLegend() {
   $("traj-legend").innerHTML = `
     <span><svg width="16" height="12"><circle cx="8" cy="6" r="4.5" fill="var(--ink-2)"/></svg> message sent</span>
@@ -675,8 +998,12 @@ function renderTrajectory() {
   }
   lanes.forEach(id => {
     const y = laneY(id);
+    if (id === "agent")   // the PM's own lane is the primary one — first + tinted
+      g += `<rect x="${padL}" y="${y-laneH/2+5}" width="${W-padL-padR}" height="${laneH-10}" rx="6"
+             fill="var(--c-agent)" opacity="0.06"/>`;
     g += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--baseline)" stroke-width="1"/>
-          <text x="${padL-10}" y="${y+4}" font-size="12" font-weight="600" text-anchor="end" fill="var(--ink-1)">${esc((actorName[id]||id).split(" (")[0])}</text>`;
+          <text x="${padL-10}" y="${y+4}" font-size="12" font-weight="${id === "agent" ? 700 : 600}"
+           text-anchor="end" fill="${id === "agent" ? "var(--c-agent)" : "var(--ink-1)"}">${esc((actorName[id]||id).split(" (")[0])}</text>`;
   });
   g += `<line x1="${x(viewClock())}" y1="${padT-6}" x2="${x(viewClock())}" y2="${padT+lanes.length*laneH+6}" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="3 3"/>`;
 
@@ -727,14 +1054,60 @@ function showTip(ev, el) {
 }
 function hideTip() { $("tooltip").style.display = "none"; }
 
-/* ---------- tabs ---------- */
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + b.dataset.tab));
-  if (b.dataset.tab === "bench") renderBench(); else render();
-});
+/* ---------- tabs + URL hash routing ---------- */
+// hash format: "#<tab>" plus optional "&run=<id>" and (benchmark only)
+// "&task=<task>", e.g. "#trajectory&run=run-20260709-185757" or
+// "#benchmark&task=stalled-launch". No hash = default (Feed, newest run).
+// Refresh and back/forward restore the tab, the run, and the expanded task.
+const TAB_HASH = {live: "feed", timeline: "timeline",
+                  trajectory: "trajectory", bench: "benchmark"};
+const HASH_TAB = {feed: "live", live: "live", timeline: "timeline",
+                  trajectory: "trajectory", benchmark: "bench", bench: "bench"};
+
+function parseHash() {
+  const parts = location.hash.replace(/^#/, "").split("&");
+  const out = {tab: HASH_TAB[parts[0]] || null, run: null, task: null};
+  for (const p of parts.slice(1)) {
+    if (p.startsWith("run=")) out.run = decodeURIComponent(p.slice(4));
+    else if (p.startsWith("task=")) out.task = decodeURIComponent(p.slice(5));
+  }
+  return out;
+}
+
+function activeTab() {
+  const b = document.querySelector("nav button.active");
+  return b ? b.dataset.tab : "live";
+}
+
+function activateTab(tab) {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + tab));
+  if (tab === "bench") renderBench(); else render();
+}
+
+function setHash(tab, run) {
+  let h = "#" + (TAB_HASH[tab] || tab);
+  if (run) h += "&run=" + run;
+  if (location.hash === h) applyHash();   // no change -> re-apply (idempotent)
+  else location.hash = h;                 // change -> hashchange -> applyHash
+}
+
+function applyHash() {
+  const {tab, run, task} = parseHash();
+  if (run && HUBMODE && run !== currentRun && RUNS.some(r => r.id === run))
+    loadRun(run);
+  if (tab === "bench" && task) BENCH_FOCUS = task;  // expand + scroll on render
+  if (tab) activateTab(tab);
+}
+
+function selectRun(id) { setHash(activeTab(), id); }   // run chips route via hash
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () =>
+  setHash(b.dataset.tab, HUBMODE && currentRun ? currentRun : null));
+window.addEventListener("hashchange", applyHash);
 
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s) { return esc(s).replace(/"/g, "&quot;"); }
 window.addEventListener("resize", renderTrajectory);
 init();
 </script>
