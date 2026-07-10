@@ -13,31 +13,33 @@
   * { box-sizing: border-box; margin: 0; }
   body { background: var(--bg); color: var(--ink); overflow: hidden;
          font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .slide { position: absolute; inset: 0; display: none; padding: 7vh 8vw;
+  .slide { position: absolute; inset: 0; display: none; padding: 6.5vh 7vw;
            flex-direction: column; justify-content: center; }
   .slide.on { display: flex; }
-  .kicker { font-size: 2.1vh; letter-spacing: .22em; text-transform: uppercase;
-            color: var(--accent); font-weight: 700; margin-bottom: 2.2vh; }
+  .kicker { font-size: 2vh; letter-spacing: .22em; text-transform: uppercase;
+            color: var(--accent); font-weight: 700; margin-bottom: 2vh; }
   h1 { font-size: 7vh; line-height: 1.08; letter-spacing: -.01em; }
-  h2 { font-size: 5vh; line-height: 1.12; margin-bottom: 3vh; letter-spacing: -.01em; }
-  p, li { font-size: 2.65vh; line-height: 1.5; color: var(--ink); }
+  h2 { font-size: 4.6vh; line-height: 1.12; margin-bottom: 2.8vh; letter-spacing: -.01em; }
+  p, li { font-size: 2.5vh; line-height: 1.5; color: var(--ink); }
   .sub { color: var(--dim); }
-  ul { padding-left: 3.2vh; display: grid; gap: 1.5vh; }
   b { color: #fff; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4vw; align-items: start; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 3vw; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2vw; align-items: start; }
   table { border-collapse: collapse; width: 100%; font-size: 2.2vh; }
-  th { text-align: left; color: var(--dim); font-size: 1.8vh; text-transform: uppercase;
+  th { text-align: left; color: var(--dim); font-size: 1.75vh; text-transform: uppercase;
        letter-spacing: .08em; padding: 1vh 1.2vh; border-bottom: 1px solid var(--dim); }
   td { padding: 1.1vh 1.2vh; border-bottom: 1px solid var(--border); vertical-align: top; }
   td.num { font-variant-numeric: tabular-nums; }
-  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace;
-                font-size: .92em; color: var(--green); }
-  .formula { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-             padding: 2.2vh 2.6vh; font-family: ui-monospace, Menlo, monospace;
-             font-size: 2.35vh; line-height: 1.7; color: var(--ink); white-space: pre; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .92em;
+          color: var(--green); }
+  .ex { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+        padding: 2vh 2.3vh; font-family: ui-monospace, Menlo, monospace;
+        font-size: 2.15vh; line-height: 1.65; color: var(--ink); white-space: pre-wrap; }
+  .ex .c { color: var(--dim); }
+  .cap { font-size: 2.1vh; color: var(--dim); margin-top: 1.4vh; }
   .pill { display: inline-block; border: 1px solid var(--border); border-radius: 999px;
           padding: .5vh 1.6vh; font-size: 2vh; color: var(--dim); margin: 0 .8vh .8vh 0; }
-  .band { position: relative; height: 9vh; margin: 3vh 0; }
+  .band { position: relative; height: 9vh; margin: 3vh 0 4vh; }
   .band .rail { position: absolute; left: 0; right: 0; top: 50%; height: .6vh;
                 background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
                 border-radius: 999px; }
@@ -46,7 +48,9 @@
   .band .tick i { display: block; width: .35vh; height: 9vh; background: var(--ink);
                   margin: 0 auto; opacity: .8; font-style: normal; }
   .band .tick span { display: block; margin-top: .6vh; white-space: nowrap; }
-  footer { position: fixed; bottom: 2.2vh; left: 0; right: 0; display: flex;
+  .foot { font-size: 1.95vh; color: var(--dim); border-top: 1px solid var(--border);
+          padding-top: 1.5vh; margin-top: 3vh; }
+  footer { position: fixed; bottom: 2vh; left: 0; right: 0; display: flex;
            justify-content: space-between; padding: 0 3vw; color: var(--dim);
            font-size: 1.8vh; }
   .accent { color: var(--accent); } .green { color: var(--green); }
@@ -59,133 +63,169 @@
 <section class="slide on">
   <div class="kicker">project presentation</div>
   <h1>A Project Manager<br>Simulation Environment</h1>
-  <p style="margin-top:3.5vh" class="sub">One simulated work week at a small SaaS company.
-  An agent plays the project manager; simulated coworkers do the work. The design rule
-  throughout: <b style="color:var(--ink)">LLMs only produce dialogue — every consequence in the
-  world comes from deterministic rules.</b> That makes runs replayable, rewards stable across
-  rollouts (GRPO-clean), and the score impossible to talk your way into.</p>
-  <p style="margin-top:2.5vh"><span class="pill">1 · the world: communication &amp; tasks</span>
+  <p style="margin-top:3vh" class="sub">One simulated week at a SaaS company. An agent is the PM;
+  simulated coworkers do the work.</p>
+  <div class="ex" style="margin-top:2.5vh">rule #1   LLMs only produce <b>dialogue</b> — every consequence comes from deterministic rules
+result    same seed + same actions = the same week, byte for byte  <span class="c">(GRPO-clean, replayable)</span></div>
+  <p style="margin-top:2.5vh"><span class="pill">1 · world: communication &amp; tasks</span>
      <span class="pill">2 · belief updates</span>
      <span class="pill">3 · skills &amp; working sessions</span>
-     <span class="pill">4 · the rubrics</span></p>
+     <span class="pill">4 · rubrics</span></p>
 </section>
 
 <!-- 2 · world: the machine -->
 <section class="slide">
   <div class="kicker">1 · the world</div>
-  <h2>A week that runs on events, not ticks</h2>
-  <div class="cols">
-    <ul>
-      <li>Time is a single clock that <b>jumps from event to event</b> (a
-          discrete-event simulation). Each agent action costs one simulated
-          minute; model inference latency never touches simulated time.</li>
-      <li>Task progress is <b>computed, not simulated</b>: a pure function of
-          the config, the clock, and the action log — work "accrues
-          overnight" with no process running.</li>
-      <li>Every state change is one line in an append-only log, so
-          <b>any past instant can be rebuilt exactly, with zero LLM calls</b>.</li>
-    </ul>
-    <ul>
-      <li><b>Nothing is polled — everything is delivered.</b> The agent has no
-          background thread, so "checking your inbox" is itself a scheduled
-          event: a chat ping wakes the agent even mid time-skip; email arrives
-          when the next inbox-check event fires.</li>
-      <li><b>Determinism contract:</b> same config + same seed + same actions
-          = the same week, byte for byte. All randomness is drawn from seeded
-          streams and frozen into the scenario file.</li>
-    </ul>
-  </div>
+  <h2>Time jumps between events — nothing else exists</h2>
+  <div class="ex"><span class="c">Mon 09:05</span>  you ping Sarah                    <span class="c">← your action costs 1 sim-minute</span>
+<span class="c">Mon 09:06</span>  you skip ahead 3 hours…
+<span class="c">Mon 09:42</span>  …interrupted: Sarah replies        <span class="c">← her latency: a seeded 5–45 min draw</span>
+<span class="c">Mon 09:42</span>  the model thinks for 30 real seconds — <b>sim clock doesn't move</b>
+<span class="c">Tue 09:00</span>  overnight, the migration gained 0 hours: nobody works at night —
+           progress is <b>computed from the calendar</b>, no process ever "runs"</div>
+  <p class="cap">Everything lands in one append-only event log → any instant can be rebuilt
+  exactly, with zero LLM calls. And nothing is polled: chats wake you mid-skip; email arrives
+  when the next inbox-check event fires.</p>
 </section>
 
 <!-- 3 · world: communication -->
 <section class="slide">
   <div class="kicker">1 · the world — communication</div>
-  <h2>Channels are priced like a real office</h2>
-  <table>
-    <tr><th>channel</th><th>speed</th><th>cost</th><th>the real-life claim behind the number</th></tr>
-    <tr><td><b class="accent">chat</b></td>
-        <td>answered in 5–45 sim-minutes; reaches the agent instantly</td>
-        <td>each message costs the <i>receiver</i> <b class="red">20 minutes of focus</b> — and pings <b>stack</b>, they don't overlap</td>
-        <td>an interruption costs ~20 min of refocus on deep work; three pings are three broken flows</td></tr>
-    <tr><td><b class="green">email</b></td>
-        <td>read at the receiver's next inbox pass (~every 1.5–2.5 h; the agent's fires every 30 min)</td>
-        <td>zero focus cost</td>
-        <td>email is async by social contract — nobody drops their editor because mail arrived</td></tr>
-    <tr><td><b class="violet">meeting</b></td>
-        <td>instant back-and-forth in a live room; verbatim minutes kept</td>
-        <td>blocks <b>every attendee's calendar</b> for the whole slot</td>
-        <td>a 1-hour meeting with 4 people costs the org 4 person-hours</td></tr>
-  </table>
-  <p class="sub" style="margin-top:2.4vh">Crucially, <b style="color:var(--ink)">none of these numbers appear in any tool
-  description</b>. Agents learn the economics from evidence (reply timestamps, completions slipping),
-  from people (the focus cost is <i>felt</i>, so coworkers complain in character when over-pinged),
-  or from reward — noisy trajectories just score lower.</p>
+  <h2>Three channels, three price tags</h2>
+  <div class="cols3">
+    <div>
+      <div class="ex"><b class="accent">chat</b>
+<span class="c">10:00</span> ping Sarah
+<span class="c">10:01</span> ping again
+<span class="c">10:02</span> ping again
+→ she answers in 5–45 min
+→ but loses <b class="red">3 × 20 min</b>
+  of deep-work focus</div>
+      <p class="cap">interruptions stack — they don't overlap</p>
+    </div>
+    <div>
+      <div class="ex"><b class="green">email</b>
+<span class="c">10:00</span> email Sarah
+<span class="c">11:17</span> she reads it at her
+      next inbox pass
+→ slower answer
+→ <b class="green">zero focus cost</b></div>
+      <p class="cap">async by social contract; the agent's own inbox check fires every 30 min</p>
+    </div>
+    <div>
+      <div class="ex"><b class="violet">meeting</b>
+<span class="c">14:00</span> 1h sync, 4 people
+→ instant answers, minutes kept
+→ costs the org
+  <b class="red">4 person-hours</b></div>
+      <p class="cap">the most expensive artifact in any company</p>
+    </div>
+  </div>
+  <p class="foot">None of these numbers appear in any tool description. Agents learn them from
+  timestamps, from people (<i>the cost is felt</i> — over-pinged coworkers complain in character),
+  or from reward: noisy runs simply score lower.</p>
+</section>
+
+<!-- 3b · no channel dominates -->
+<section class="slide">
+  <div class="kicker">1 · the world — why agents can't just pick one channel</div>
+  <h2>Each channel has a scenario it strictly wins</h2>
+  <div class="cols3">
+    <div>
+      <div class="ex"><b class="accent">chat wins</b>
+<span class="c">Fri 09:30</span> Sarah is blocked NOW
+on a one-line answer you have.
+
+chat  → unblocked in ≤45 min
+        <span class="c">20-min tax ≪ hours blocked</span>
+email → sits ~2h in her inbox
+        <b class="red">the morning is gone</b>
+meet  → calendars + a slot:
+        the priciest way to
+        say one sentence</div>
+    </div>
+    <div>
+      <div class="ex"><b class="green">email wins</b>
+<span class="c">Thu 09:00</span> execs want sign-off
+notes from BOTH engineers
+by end of day. No rush.
+
+email → zero focus cost,
+        answered at next pass —
+        <span class="c">hours of slack to spare</span>
+chat×2 → <b class="red">40+ min of focus</b>
+        stolen mid-crunch →
+        completions slip
+meet  → 3 person-hours for
+        something async</div>
+    </div>
+    <div>
+      <div class="ex"><b class="violet">meeting wins</b>
+<span class="c">Wed</span> the migration IS the
+critical path; Sarah alone
+misses Friday.
+
+2h session on the task:
+  1.3 + 0.6×1.0 = 1.9×
+  → <b class="green">3.8h banked</b> → ships Thu
+chat/email → words move,
+  <b class="red">work doesn't</b> — no channel
+  adds hands but a session</div>
+    </div>
+  </div>
+  <p class="foot">This is the reward-hacking defense: no channel is decoration and none dominates —
+  a policy that always chats, always emails, or always meets is strictly beaten somewhere,
+  and the physics (not a judge) hands out the loss. Measured: the always-chatting PM scores below
+  zero; the channel-matching PM approaches the ceiling.</p>
 </section>
 
 <!-- 4 · world: tasks -->
 <section class="slide">
   <div class="kicker">1 · the world — tasks</div>
   <h2>New work lands on someone — usually the wrong someone</h2>
-  <div class="cols">
-    <ul>
-      <li>Mid-week, external tasks arrive (an incident, a legal request).
-          Each one <b>lands already assigned to a default person</b> — often
-          the office volunteer who says yes to everything — and the agent is
-          told: <span class="mono">"ticket X, currently on Dave"</span>.</li>
-      <li>The manager's two levers: <b>move it</b> (reassign to a better
-          owner) and <b>reorder it</b> (raise or lower where it sits in
-          someone's queue — which changes scheduling only, never scoring
-          weight, so relabeling can't inflate the score).</li>
-    </ul>
-    <ul>
-      <li>Coworkers self-schedule sensibly: everyone always works their
-          highest-priority available task and <b>switches when that changes</b>;
-          paused work resumes exactly where it stopped.</li>
-      <li><b>Acting late costs</b>: a task moved on Thursday only accrues work
-          from Thursday — there is no retroactive credit for decisions you
-          didn't make on Monday.</li>
-      <li>If the agent does nothing all week, the defaults just play out —
-          that whole "unmanaged week" is the <b>zero point</b> of the score.</li>
-    </ul>
-  </div>
+  <div class="ex"><span class="c">Tue 11:30</span>  incident arrives → auto-assigned to <b>Dave</b> (the yes-to-everything volunteer)
+<span class="c">Tue 11:30</span>  Dave pings you: "SSO is down for Meridian — I've got it 👍"
+                                        <span class="c">(ticket: sso-4f2a, currently on dave)</span>
+<span class="c">              Dave's queue: 30h. Sarah frees up Wednesday.</span>
+
+your move A:  <span class="c">Tue 11:32</span>  reassign → Sarah        → ships <b class="green">Thu 15:00</b>
+your move B:  <span class="c">Thu 09:00</span>  reassign → Sarah        → work only counts from Thursday → <b class="red">misses Friday</b>
+your move C:  do nothing               → Dave gets to it eventually → <b class="amber">the unmanaged week</b></div>
+  <p class="cap">Coworkers self-schedule sensibly (highest priority first, switching when that
+  changes, half-done work never lost). The PM's levers: <b>move</b> a task, <b>reorder</b> a queue
+  (scheduling only — relabeling priority can't inflate the score), or leave the defaults alone.
+  Option C — the fully unmanaged week — is the score's zero point.</p>
 </section>
 
 <!-- 5 · beliefs: three layers -->
 <section class="slide">
   <div class="kicker">2 · belief updates</div>
-  <h2>Three versions of every fact</h2>
-  <table>
-    <tr><th>layer</th><th>who holds it</th><th>behavior</th></tr>
-    <tr><td><b class="red">ground truth</b></td><td>the engine and the grader — nobody in the sim</td>
-        <td>the scheduler's actual state; not even the person doing the task can read it</td></tr>
-    <tr><td><b class="amber">belief</b></td><td>each coworker, about their own work</td>
-        <td>honest but often wrong — and it <b>updates on an authored schedule</b>: Sarah genuinely
-            believes "70%, on track" on Monday and <i>realizes</i> "55%, schema rework" on Tuesday,
-            sometimes messaging the manager to confess unprompted</td></tr>
-    <tr><td><b class="green">the tracker</b></td><td>everyone</td>
-        <td>the shared board — lags behind, inherits stale claims; it self-corrects only on
-            <b>completions</b>, the one public, reliable signal in the whole environment</td></tr>
-  </table>
-  <p class="sub" style="margin-top:2.4vh">So "just ask everyone on Monday" collects honest <i>wrong</i>
-  answers — there is no oracle to interrogate. Scenarios also plant <b style="color:var(--ink)">red
-  herrings</b>: confidently-held false beliefs ("rate-limiting is launch-critical!") that cost real
-  capacity if the agent chases them. Every update is a scheduled, deterministic event — no LLM sits
-  on any information path.</p>
+  <h2>Every fact exists three times</h2>
+  <div class="ex">the migration, Monday 09:05:
+  <b class="red">truth</b>      55% done          <span class="c">← only the engine & the grader can see this</span>
+  <b class="amber">belief</b>     Sarah: "70%, on track"   <span class="c">← honest. wrong. she hasn't re-checked.</span>
+  <b class="green">the board</b>  "70%, on track"    <span class="c">← inherited her stale claim</span>
+
+ask her Monday → you get an honest 70%.        <span class="c">there is no oracle to interrogate.</span>
+and Dave insists: "rate-limiting is launch-critical!"   <span class="c">← authored red herring; it isn't.
+                                                  chasing it burns real capacity.</span></div>
+  <p class="cap">Beliefs mature on an authored schedule (deterministic events, no LLM on any
+  information path). The board self-corrects only on <b>completions</b> — the one public,
+  reliable signal in the environment.</p>
 </section>
 
 <!-- 6 · beliefs: the week -->
 <section class="slide">
   <div class="kicker">2 · belief updates — one task's week</div>
   <h2>What the agent can know, and when</h2>
-  <div class="formula">Mon 09:05   board says "~70%, on track"     Sarah believes it    truth: 55%
-Tue 14:00   scheduled belief-update fires → Sarah realizes 55%
-            she pings you: "schema rework surfaced — ~18 focused hours left"
-Wed–Thu     asking again gets her honest current belief (still not truth)
-Thu 16:30   the task actually completes → board flips to Done
-            ← the reliable signal: two completions ≈ a speed estimate per person</div>
-  <p class="sub" style="margin-top:2.6vh">The skill being graded is not truth-extraction — it's
-  <b style="color:var(--ink)">operating under honest noise</b>: keep slack against estimates, react
-  fast to confessions, calibrate people from what actually ships.</p>
+  <div class="ex"><span class="c">Mon 09:05</span>  board: "~70%, on track"        <span class="c">Sarah believes it. truth: 55%.</span>
+<span class="c">Tue 14:00</span>  belief-update event fires → Sarah <b>realizes</b> 55%
+           she pings you, unprompted: "schema rework surfaced — ~18 focused hours left"
+<span class="c">Wed 10:00</span>  you ask again → her honest <i>current</i> belief   <span class="c">(still not truth)</span>
+<span class="c">Thu 16:30</span>  migration actually completes → board flips to <b class="green">Done</b>
+           <span class="c">two completions ≈ a speed estimate for that person</span></div>
+  <p class="cap">The graded skill is not truth-extraction — it's operating under honest noise:
+  keep slack against estimates, react fast to confessions, calibrate people from what ships.</p>
 </section>
 
 <!-- 7 · skills -->
@@ -194,27 +234,29 @@ Thu 16:30   the task actually completes → board flips to Done
   <h2>Some people are quietly faster — nobody tells you</h2>
   <div class="cols">
     <div>
-      <div class="formula">config (frozen at authoring):
+      <div class="ex">config <span class="c">(frozen numbers, never a runtime LLM)</span>:
   sarah.skills = {db: 1.3}
-  dave.skills  = {auth: 1.3, ops: 1.2}
-  task.tags    = ["db"]
+  dave.skills  = {auth: 1.3}
 
-speed(person on task)
-  = geometric mean of matching factors
-  → Sarah does db work 30% faster</div>
+the same 12h database task:
+  on Dave  → 12h of calendar
+  on Sarah → <b class="green">9¼h</b>  <span class="c">(12 ÷ 1.3)</span></div>
     </div>
-    <ul>
-      <li>Skill factors are <b>plain numbers in the scenario file</b> — never a
-          runtime LLM call. Every rollout of a task sees identical physics
-          (clean group-relative advantages), and there is nothing an agent
-          can phrase its way into.</li>
-      <li><b>Hidden from the agent</b>: not on the board, not in any tool
-          output. The only way to learn who's fast at what is to watch how
-          quickly work actually completes.</li>
-      <li>The scoring ceiling routes by skill too, so "give the db task to
-          the db person" is part of what a perfect week means.</li>
-    </ul>
+    <div>
+      <div class="ex">what the agent sees:
+  board: nothing about skills
+  tools: nothing about skills
+
+what the agent can notice:
+  <span class="c">Mon</span>  gave Sarah the db task
+  <span class="c">Thu</span>  she finished a day "early"
+  → <b>infer</b> she's the db specialist
+  → route the next one accordingly</div>
+    </div>
   </div>
+  <p class="cap">Identical physics for every rollout of a task (clean group-relative advantages),
+  and nothing an agent can phrase its way into. The scoring ceiling routes by skill too — so
+  "give the db task to the db person" is part of what a perfect week means.</p>
 </section>
 
 <!-- 8 · skills combine in meetings -->
@@ -223,35 +265,35 @@ speed(person on task)
   <h2>Meetings can move work — boundedly</h2>
   <div class="cols">
     <div>
-      <div class="formula">a task has exactly ONE owner.
-more hands = book a meeting ON the task:
-  schedule_meeting(..., task="migration")
+      <div class="ex">migration is the bottleneck (Sarah's, db).
+book a working session ON it:
 
-session rate = best contributor
-             + 0.6 × next
-             + 0.36 × next …
-             capped at 2.5×
+  schedule_meeting(
+    attendees=[sarah, dave],
+    task="migration", 2h)
 
-the session's output lands on the task
-when the meeting ends</div>
+rate = 1.3 <span class="c">(sarah, best)</span>
+     + 0.6 × 1.0 <span class="c">(dave)</span>  = <b class="green">1.9×</b>
+→ 2h room ⇒ <b class="green">3.8h</b> of progress,
+  banked when the meeting ends</div>
     </div>
-    <ul>
-      <li>Attendees' skill factors <b>combine with diminishing returns</b>:
-          a war-room can roughly <b>double</b> the pace of a bottleneck task —
-          it can never scale linearly with headcount (unbounded parallelism
-          would break the scoring ceiling; this is Brooks's law as physics).</li>
-      <li>The trade is genuine: the session's boost vs <b>everyone in the
-          room stopping their own work</b> for the slot.</li>
-      <li>So the winning move is narrow and real: swarm the skill-matched
-          people on the critical-path task — and nothing else. Idle syncs
-          are pure loss, and the score says so.</li>
-    </ul>
+    <div>
+      <div class="ex">the fine print:
+  helpers add 1, 0.6, 0.36, … of
+  their rate — <b>capped at 2.5×</b>
+
+  a 6-person pile-on ≈ a 3-person
+  session. never linear in headcount.
+
+the bill:
+  Dave's own 30h queue is <b class="red">frozen</b>
+  for those 2 hours.</div>
+    </div>
   </div>
-  <p class="sub" style="margin-top:3vh; font-size:2vh; border-top:1px solid var(--border); padding-top:1.6vh">
-    “Adding manpower to a late software project makes it later.”
-    — Fred Brooks, <i>The Mythical Man-Month</i> (1975). The cap and the
-    diminishing weights are that law written as physics: people help, but
-    coordination overhead eats each additional pair of hands.</p>
+  <p class="foot">“Adding manpower to a late software project makes it later.” — Fred Brooks,
+  <i>The Mythical Man-Month</i> (1975). The cap and the diminishing weights are that law written
+  as physics: the winning move is swarming skill-matched people on the critical path — and
+  nothing else.</p>
 </section>
 
 <!-- 9 · rubrics: the scale -->
@@ -260,22 +302,17 @@ when the meeting ends</div>
   <h2>Every task instance carries its own scale</h2>
   <div class="band">
     <div class="rail"></div>
-    <div class="tick" style="left:6%"><i></i><span><b>&lt; 0</b> made the week worse<br class="sub">interruptions, churn, busywork</span></div>
-    <div class="tick" style="left:34%"><i></i><span><b>0</b> = the unmanaged week<br class="sub">same sim, agent does nothing</span></div>
+    <div class="tick" style="left:6%"><i></i><span><b>&lt; 0</b> made the week worse<br class="sub">pings, churn, busywork</span></div>
+    <div class="tick" style="left:34%"><i></i><span><b>0</b> = the unmanaged week<br class="sub">defaults play out, agent does nothing</span></div>
     <div class="tick" style="left:92%"><i></i><span><b>1</b> = the perfect week<br class="sub">frictionless optimum, exhaustive search</span></div>
   </div>
-  <ul>
-    <li>Both anchors are <b>computed from the scenario file alone</b> — before any
-        agent runs — and stamped into it. Score = the fraction of the gap between
-        them the agent actually captured.</li>
-    <li>That normalization is what makes <b>hundreds of generated task instances
-        comparable</b> — and the gap's width <i>is</i> the authored difficulty:
-        it measures how wrong the week's default assignments are. A gate rejects
-        any instance where an unmanaged week is already near-optimal.</li>
-    <li>Instances are generated from a template by remixing physics (efforts,
-        timings, default owners, ticket ids) under seeded draws, then gated for
-        validity, fairness, and difficulty tier.</li>
-  </ul>
+  <div class="ex">one generated instance <span class="c">(both anchors computed from the config file, before any agent runs)</span>:
+  unmanaged week ships <b>58%</b> of the work-weight   → score 0
+  perfect week ships   <b>100%</b>, early              → score 1
+  an agent ships 79%, mostly early                → score <b class="amber">0.41</b>   <span class="c">← the fraction of the gap captured</span></div>
+  <p class="cap">The gap's width IS the authored difficulty — it measures how wrong the week's
+  default assignments are. A generator remixes physics (efforts, timings, default owners, ticket
+  ids) under seeded draws; gates reject anything invalid, unfair, or degenerate.</p>
 </section>
 
 <!-- 10 · rubrics: metrics + evidence -->
@@ -286,25 +323,26 @@ when the meeting ends</div>
     <div>
       <table>
         <tr><th>metric</th><th>plain reading</th></tr>
-        <tr><td><b>completion</b></td><td>did the work get done (bigger/higher-priority tasks count more)</td></tr>
-        <tr><td><b>efficiency</b></td><td>how early finished work landed before the Friday deadline</td></tr>
-        <tr><td><b>done-rate</b></td><td>weighted fraction of the week's work that shipped</td></tr>
-        <tr><td><b>fairness</b></td><td>was load spread across people, or piled on one person</td></tr>
+        <tr><td><b>completion</b></td><td>did the work get done (priority-weighted)</td></tr>
+        <tr><td><b>efficiency</b></td><td>how early finished work landed</td></tr>
+        <tr><td><b>done-rate</b></td><td>weighted fraction that shipped</td></tr>
+        <tr><td><b>fairness</b></td><td>load spread across people, or piled on one</td></tr>
       </table>
-      <p class="sub" style="margin-top:2vh">No keyword checks, no LLM judge, no activity credit —
-      the only path to a score is a genuinely better week. Interruptions and idle meetings
-      lower it through capacity physics alone.</p>
+      <div class="ex" style="margin-top:2vh">no keyword checks · no LLM judge
+no credit for activity
+the only path to a score:
+  <b>a genuinely better week</b></div>
     </div>
     <div>
       <table>
         <tr><th>generated tier</th><th>haiku</th><th>sonnet</th></tr>
         <tr><td>easy</td><td class="num red">−0.13</td><td class="num green">0.91</td></tr>
         <tr><td>medium</td><td class="num amber">+0.41</td><td class="num green">0.97</td></tr>
-        <tr><td>hard (forced triage)</td><td class="num red">−0.26</td><td class="num amber">0.49</td></tr>
+        <tr><td>hard <span class="sub">(forced triage)</span></td><td class="num red">−0.26</td><td class="num amber">0.49</td></tr>
       </table>
-      <p class="sub" style="margin-top:2vh">Capability ordering holds in all six cells; the hard
-      tier finally costs a strong model half its gap. The weak model's negatives are diagnosable
-      from its full recorded trajectory: constant pinging, work moved onto saturated people.</p>
+      <p class="cap">Capability ordering holds in all six cells; the hard tier costs even a strong
+      model half its gap. Haiku's negatives are diagnosable from its recorded trajectory:
+      constant pinging, work moved onto saturated people.</p>
     </div>
   </div>
 </section>
@@ -313,20 +351,18 @@ when the meeting ends</div>
 <section class="slide">
   <div class="kicker">the pipeline</div>
   <h2>From one authored company to a graded curriculum</h2>
-  <p style="font-size:3vh; line-height:1.8" class="mono">
+  <p style="font-size:2.9vh; line-height:1.8" class="mono">
     template ─→ <b class="accent">generate</b> (seeded physics remix)
     ─→ <b class="amber">gate</b> (valid · fair · difficulty tier)
     ─→ <b class="violet">stamp</b> the two anchors
     ─→ <b class="green">run models</b> ─→ live dashboard</p>
-  <ul style="margin-top:3vh">
-    <li>Difficulty is <b>measured, never asserted</b>: the config-side fingerprint
-        predicts it; model score-degradation across tiers confirms it.</li>
-    <li>Deterministic end to end — suited to training, not just evaluation:
-        fixed physics per instance, always-numeric reward, reproducible weeks.</li>
-    <li>Every benchmark point is three clicks from its evidence: task → run →
-        the agent's full conversation (every thought, tool call, and result,
-        untruncated) next to the world it produced.</li>
-  </ul>
+  <div class="ex" style="margin-top:3vh">$ python -m sim.generate scenarios/demo.json --tier hard --n 5
+<span class="c">demo-hard-1100000.json   util 0.94  winnable 9.24  triage True  fair ✓</span>
+$ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model claude-sonnet-5
+<span class="c">SCORE: 0.491   (0 = do-nothing, 1 = optimal)</span></div>
+  <p class="cap">Difficulty measured, never asserted. Deterministic end to end — built for
+  training, not just evaluation. Every benchmark point is three clicks from its evidence:
+  task → run → the agent's full untruncated conversation beside the world it produced.</p>
 </section>
 
 <footer>
