@@ -35,6 +35,10 @@ Tools:
 - Task
 
 
+Event queue sorted by times are the ticking:
+- Event 
+
+
 Evaluation on:
 - F(tasks completed, tasks dropped | PC) - F(tasks completed, tasks dropped | no PC) 
 
@@ -43,6 +47,9 @@ Some nice behaviors i am expecting:
 -
 - instead of pasting contents of doc, PC will share the doc! 
 
+
+How can we tune the difficulty of the task:
+- if we need pass@4 to be 1?
 
 
 

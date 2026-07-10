@@ -33,7 +33,6 @@ integrated tool surfaces like chat, email, calendar, meeting/transcript capture,
 multiple stateful coworkers with distinct roles and behavior, including proactive outreach and realistic response delays
 evaluation that rewards improved outcomes and sound decisions more than superficial activity
 
-
 Your implementation should make your systems choices legible. We should be able to tell what advances synchronously with an agent action, what advances asynchronously in the background, how scenario state is owned and mutated, how evaluation is computed, and how the system would grow to support many more scenarios without collapsing into prompt spaghetti or hand-authored one-offs.
 If you use model-based verification anywhere, be explicit about why it is needed, what inputs it sees, and how you keep results stable enough to trust.
 
