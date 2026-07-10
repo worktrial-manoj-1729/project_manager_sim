@@ -71,9 +71,7 @@
   <h1>A Project Manager<br>Simulation Environment</h1>
   <p style="margin-top:3vh" class="sub">One simulated week at a SaaS company. An agent is the PM;
   simulated coworkers do the work.</p>
-  <div class="ex" style="margin-top:2.5vh">rule #1   LLMs only produce <b>dialogue</b> — every consequence comes from deterministic rules
-result    same seed + same actions = the same week, byte for byte  <span class="c">(stable rewards for GRPO; every run replayable)</span></div>
-  <p style="margin-top:2.5vh"><span class="pill">1 · world: communication &amp; tasks</span>
+  <p style="margin-top:3vh"><span class="pill">1 · world: communication &amp; tasks</span>
      <span class="pill">2 · belief updates</span>
      <span class="pill">3 · skills &amp; working sessions</span>
      <span class="pill">4 · rubrics</span></p>
@@ -93,8 +91,8 @@ result    same seed + same actions = the same week, byte for byte  <span class="
        assignees: [<b>sam</b>], tags: [backend], blocked_by: [design-specs],
        <span class="green">belief</span>:    [{ remaining_frac: .15, held_by: sam },        <span class="c">Mon: "nearly done"</span>
                    { at: <b>Tue 13:00</b>, remaining_frac: .70, ping }],  <span class="c">the slip</span>
-       <span class="violet">questions</span>: [{ at: <b>Tue 09:00</b>, gates: true, held_by: sam,
-                    ping: "OAuth or email+pw? — blocked till you call it" }] }],
+       <span class="violet">questions</span>: [{ at: <b>Tue 09:00</b>, <b>gates: true</b>, held_by: sam,   <span class="c">gates ⇒ the task</span>
+                    ping: "OAuth or email+pw? blocked till you call it" }] }], <span class="c">STALLS till you answer</span>
 
   <span class="c">"arrivals"</span>: [{ at: Tue, task: { security-audit, P1, assignees:[<b>maya</b>] }}],  <span class="c">← wrong (busy) owner</span>
   <span class="c">"npcs"</span>:    [{ id: sam, <span class="accent">skills</span>: { backend: <b>1.9</b> } }],           <span class="c">← HIDDEN speed; never shown</span>
@@ -259,6 +257,39 @@ your move C:  do nothing               → Dave gets to it eventually → <b cla
   Option C — the unmanaged week — is the score's zero point.</p>
 </section>
 
+<!-- 4b · the coworkers (persona) -->
+<section class="slide">
+  <div class="kicker">the coworkers</div>
+  <h2>Each coworker is an agent: a persona + private knowledge</h2>
+  <div class="cols">
+    <div>
+      <div class="ex" style="font-size:1.95vh"><span class="c">npc</span> <b>maya</b> {
+  role: "Backend Lead",
+  <span class="green">persona</span>: "direct, but guarded about
+    her own slippage; only comes clean
+    when asked a specific question",
+  <span class="violet">knowledge</span>: [
+    "you own the API; 3 people idle
+     behind you until you lock it",
+    "you're blocked on a data-model
+     call only the PM can make" ],
+  <span class="accent">skills</span>: { backend: 1.9 }   <span class="c">← hidden</span>
+}</div>
+    </div>
+    <div>
+      <p>An LLM <b>voices</b> them — but they have <b>no write channel</b>: their words never
+      mutate the world, only rules do. So NPC text can't be injected to change physics or
+      score, and runs stay deterministic.</p>
+      <p style="margin-top:1.8vh">What makes them feel real: <b>proactive outreach</b> (they
+      ping you when something breaks), <b>realistic reply delays</b>, and honesty <b>shaped by
+      persona</b> — Maya hedges until you ask the right question; Dev over-shares a herring.
+      You infer the truth from what they <b>do</b> (completions), not what they say.</p>
+    </div>
+  </div>
+  <p class="foot">Persona + private knowledge are authored in the config; each NPC's experience
+  stream (what they've seen) is appended as the week unfolds — a pure, replayable fold, no hidden RNG.</p>
+</section>
+
 <!-- 5 · beliefs: three layers -->
 <section class="slide">
   <div class="kicker">2 · belief updates</div>
@@ -345,10 +376,15 @@ three ways to add Dave:
   never linear in headcount.
 
 the bill (either way):
-  Dave's own 30h queue is <b class="red">frozen</b>
-  while he's on Sarah's task —
-  a meeting also books a <b class="red">room-hour</b>
-  for everyone in it.
+  each person on Sarah's task has
+  their <b class="red">own queue frozen</b> meanwhile.
+
+meetings are rate-limited PER PERSON:
+  <b class="red">≤ 180 meeting-min / day</b> each,
+  and none can be booked over an
+  <b class="red">out-of-office</b> block (PTO / other
+  project) — you can't swarm people
+  who aren't there.
 
 <span class="c">→ worth it for a real bottleneck or an
   idle teammate; a net loss otherwise.</span></div>
@@ -380,6 +416,33 @@ the bill (either way):
   anchor. The gap's width IS the difficulty: how wrong the week's defaults are.</p>
 </section>
 
+<!-- 9a · the two anchors -->
+<section class="slide">
+  <div class="kicker">4 · the rubrics — the two anchors</div>
+  <h2>Both anchors come from the config — before any agent runs</h2>
+  <div class="cols">
+    <div>
+      <div class="ex"><b class="red">BASELINE</b>  (no-PM floor → score 0)
+for each arrival:
+    owner ← its org-fallback pickup
+run the SAME scheduler, zero PM actions
+value ← Σ w·(progress + done, early)</div>
+      <p class="cap">an honest unmanaged week — the team self-organizes, badly. Not a strawman.</p>
+    </div>
+    <div>
+      <div class="ex"><b class="green">OPT</b>  (frictionless best → score 1)
+for assignment in owners^tasks:      <span class="c">exhaustive</span>
+    <span class="c"># greedy + hill-climb once too big</span>
+    run SAME scheduler, busy={},
+        questions answered at t0,
+        true skills
+value ← <b>max</b> combined over all</div>
+      <p class="cap">a cheap, stable reference — <i>not</i> an unbeatable ceiling (coordination can pass it).</p>
+    </div>
+  </div>
+  <div class="ex" style="margin-top:1.4vh">SCORE = (agent − baseline) / (OPT − baseline)     <span class="c">both fold the SAME scheduler over config TRUTH — never beliefs; pure functions of the file, stamped once</span></div>
+</section>
+
 <!-- 9b · complexity levers -->
 <section class="slide">
   <div class="kicker">4 · the rubrics — complexity levers</div>
@@ -401,8 +464,10 @@ the bill (either way):
     <tr><td><b>forced triage</b></td><td>total work &gt; team capacity</td>
         <td>even perfect play must sacrifice — choosing what dies is the skill</td></tr>
   </table>
-  <p class="cap">Every lever is a number in a config file. One bound on all of them: a task must
-  stay completable from the moment the PM could know of it — otherwise the instance is rejected.</p>
+  <p class="cap">Every lever is a number in a config file, so the band is <b>programmable</b>: a tuning
+  loop <b>widens</b> it (more winnable) or <b>sharpens/spreads</b> it (which decisions it teaches) by editing
+  one seed number and re-measuring — crunch → mobile → bigweek walked winnable 7 → 10 → 26 this way.
+  One bound on all of them: a task must stay <b>completable</b> from the moment the PM could first know of it.</p>
 </section>
 
 <!-- 10 · rubrics: metrics + evidence -->
@@ -505,7 +570,7 @@ $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model
 
 <footer>
   <span>project_manager_sim</span>
-  <span id="pos">1 / 16</span>
+  <span id="pos">1 / 18</span>
   <span>← → to navigate</span>
 </footer>
 
