@@ -26,7 +26,7 @@ import json
 import math
 import sys
 
-from .optimal import _all_tasks, opt_ideal, worker_ids
+from .optimal import _all_tasks, _skills_of, opt_ideal, worker_ids
 from .rubric import load_rubric, task_value
 from .sim_time import fmt, working_minutes_between
 from .tasks import compute_schedule, task_view
@@ -43,7 +43,8 @@ def baseline_value(scenario, rubric):
                   assigned_at=fb[t["id"]]["at"])
              if t["id"] in fb and not t.get("assignees") else t
              for t in _all_tasks(scenario)]
-    rows = task_view(tasks, start, horizon, busy_by_assignee={})
+    rows = task_view(tasks, start, horizon, busy_by_assignee={},
+                     skills=_skills_of(scenario))
     return task_value(rows, rubric.get("task_value", {}), horizon, start)
 
 
@@ -61,7 +62,7 @@ def fingerprint(scenario, rubric=None):
     tasks = _all_tasks(scenario)
     assigned = [dict(t, assignees=[opt["assignment"][t["id"]]])
                 if t["id"] in opt["assignment"] else t for t in tasks]
-    sched = compute_schedule(assigned, start)
+    sched = compute_schedule(assigned, start, skills=_skills_of(scenario))
     last_done = max((s["done_at"] for s in sched.values()
                      if s["done_at"] is not None), default=start)
 
@@ -100,7 +101,7 @@ def fingerprint(scenario, rubric=None):
             if "at" not in bel:
                 continue
             rows_at = task_view(_all_tasks(scenario), start, bel["at"],
-                                busy_by_assignee={})
+                                busy_by_assignee={}, skills=_skills_of(scenario))
             row = next((r for r in rows_at if r["id"] == t["id"]), None)
             left = (t["effort_hours"] - (row["true_done_hours"] if row else 0))
             if left <= 0:

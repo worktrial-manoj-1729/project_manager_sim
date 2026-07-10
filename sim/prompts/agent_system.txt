@@ -20,6 +20,7 @@ How your tools work (the mechanics):
 What you are NOT told — you must INFER it (this IS the job):
 - The tracker and what people say can be STALE or WRONG: reported progress, priorities, and effort estimates may not match reality. Trust what actually COMPLETES over what's claimed, and probe when a number looks off.
 - People have finite, UNEQUAL capacity — some are already buried, and work often sits on the wrong person. Nobody hands you a load chart; read it from the board and from how fast things actually get done.
+- People are FASTER on work in their wheelhouse and slower outside it — the right specialist finishes the same task in less time. You are never told who is fast at what; infer it from how quickly their work actually lands, and route work to fit.
 - Each channel has a cost and a delay you only learn by using it.
 You get no readout of any of this — infer it from evidence (completions, replies, who goes quiet) and act on it.
 

@@ -220,13 +220,21 @@ class World:
                 out.append({"task": t["title"], "your_view": "~%s%% done" % pct})
         return out
 
+    def skills(self):
+        """Per-person skill maps ({person: {tag: factor}}) from the scenario —
+        frozen config the SCHEDULER uses to speed up specialists. Hidden from
+        the PM (never surfaced on the tracker); inferred from completions."""
+        return {n["id"]: n["skills"] for n in self.scenario.get("npcs", [])
+                if n.get("skills")}
+
     def tasks_view(self, at=None):
         """Ground-truth task states — DERIVED state: a pure function of time."""
         if not self.tasks:
             return []
         from .tasks import task_view
         return task_view(self.tasks, self.start_time,
-                         self.clock if at is None else at, self.busy_by_assignee())
+                         self.clock if at is None else at,
+                         self.busy_by_assignee(), self.skills())
 
     def task_done(self, task_id, at=None):
         if not self.tasks:
@@ -234,7 +242,7 @@ class World:
         from .tasks import task_done
         return task_done(self.tasks, self.start_time,
                          self.clock if at is None else at, task_id,
-                         self.busy_by_assignee())
+                         self.busy_by_assignee(), self.skills())
 
     # -- the sim clock: one owner, one mutation point, monotonic ------------
 

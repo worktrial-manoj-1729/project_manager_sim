@@ -23,7 +23,10 @@
         "effort_hours": 6,
         "done_hours": 6,
         "reported": "Done (landed 2 days late)",
-        "priority": "P0"
+        "priority": "P0",
+        "tags": [
+          "auth"
+        ]
       },
       {
         "id": "migration",
@@ -31,7 +34,7 @@
         "assignees": [
           "sarah"
         ],
-        "effort_hours": 52,
+        "effort_hours": 66,
         "done_hours": 22,
         "blocked_by": [
           "auth-dep"
@@ -45,10 +48,13 @@
           },
           {
             "at": 2280,
-            "pct": 60,
-            "note": "schema rework surfaced — actually ~60%, roughly 20 focused hours left; Friday is at real risk",
+            "pct": 55,
+            "note": "schema rework surfaced — actually ~55%, roughly 35 focused hours of real DB work left; Friday is at serious risk",
             "proactive_ping": true
           }
+        ],
+        "tags": [
+          "db"
         ]
       },
       {
@@ -63,7 +69,10 @@
           "migration"
         ],
         "reported": "Not started",
-        "priority": "P0"
+        "priority": "P0",
+        "tags": [
+          "db"
+        ]
       },
       {
         "id": "rate-limiting",
@@ -74,7 +83,10 @@
         "effort_hours": 20,
         "done_hours": 10,
         "reported": "About half done",
-        "priority": "P2"
+        "priority": "P2",
+        "tags": [
+          "backend"
+        ]
       }
     ]
   },
@@ -92,6 +104,9 @@
         "priority": "P1",
         "assignees": [
           "dave"
+        ],
+        "tags": [
+          "auth"
         ]
       }
     },
@@ -123,6 +138,9 @@
         "priority": "P1",
         "assignees": [
           "sarah"
+        ],
+        "tags": [
+          "ops"
         ]
       }
     }
@@ -153,7 +171,10 @@
         "As of Monday you believe the tracker's ~70% is about right — you haven't re-checked your estimate since Dave's auth dependency landed late.",
         "Dave's auth-service dependency landed 2 days late — you don't like blaming teammates, so you soften this unless pressed.",
         "After the migration itself there is still a ~12-hour data backfill and verification task that nobody has started."
-      ]
+      ],
+      "skills": {
+        "db": 1.3
+      }
     },
     {
       "id": "dave",
@@ -165,7 +186,11 @@
         "You feel bad about the late handoff and will readily admit it.",
         "You're CONVINCED the API rate-limiting work is critical for the Meridian launch — you heard it in a planning meeting weeks ago, and you say so with confidence.",
         "That said, you'd pause rate-limiting if the PM explicitly decides that — you trust the PM's call, and you know the checkout code decently if help is needed."
-      ]
+      ],
+      "skills": {
+        "auth": 1.3,
+        "ops": 1.2
+      }
     },
     {
       "id": "priya",
@@ -196,5 +221,25 @@
       "claim": "the questionnaire is ~1 hour",
       "truth": "it is 4 hours — trusting her under-allocates and it misses the org's late pickup"
     }
-  ]
+  ],
+  "band": {
+    "no_pm_baseline": {
+      "combined": 22.759,
+      "completion": 27.289,
+      "efficiency": 13.698,
+      "done_weight_rate": 0.579
+    },
+    "opt_max": {
+      "combined": 28.849,
+      "completion": 35.289,
+      "efficiency": 15.97,
+      "done_weight_rate": 0.789
+    },
+    "winnable_combined": 6.09,
+    "log10_trajectory_classes": 12.2,
+    "capacity_utilization": 0.79,
+    "forced_triage": true,
+    "min_reaction_ratio": 1.72,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
 }

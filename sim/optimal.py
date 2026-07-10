@@ -49,34 +49,8 @@ def worker_ids(scenario):
     return [n["id"] for n in scenario["npcs"] if n.get("worker", True)]
 
 
-def _skill_multiplier(task, person):
-    """Per-(person x task) speed factor: geometric mean of the person's skill
-    factors over the task's tags (LLM-authored at generation time, executed as
-    a pure lookup — DESIGN.md §10). Default 1.0 when either side is absent."""
-    skills = person.get("skills") or {}
-    tags = [t for t in (task.get("tags") or []) if t in skills]
-    if not tags:
-        return 1.0
-    prod = 1.0
-    for t in tags:
-        prod *= skills[t]
-    return prod ** (1.0 / len(tags))
-
-
-def ideal_effort_hours(task, scenario):
-    """Effort under the IDEAL relaxation: done by the FASTEST eligible worker.
-    The best multiplier is clamped to >= 1.0 so OPT is never slower than
-    nominal — otherwise a real worker with a >1 skill factor could finish
-    ahead of OPT and the 'upper bound' would break (normalized > 1, negative
-    regret). No skills in the data today -> multiplier 1.0 -> no-op, but the
-    ceiling stays valid the moment skills are authored."""
-    eff = task.get("effort_hours")
-    if not eff:
-        return eff
-    npcs = {n["id"]: n for n in scenario["npcs"]}
-    best = max((_skill_multiplier(task, npcs[w]) for w in worker_ids(scenario)
-                if w in npcs), default=1.0)
-    return eff / max(1.0, best)
+def _skills_of(scenario):
+    return {n["id"]: n["skills"] for n in scenario["npcs"] if n.get("skills")}
 
 
 def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
@@ -86,16 +60,20 @@ def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
     horizon = rubric["horizon"]
     start = scenario.get("start_time", 545)
     workers = worker_ids(scenario)
+    skills = _skills_of(scenario)
 
     tasks = _all_tasks(scenario)
     fixed = [t for t in tasks if not t.get("effort_hours")]
-    # ideal relaxation: each task takes the fastest eligible worker's effort
-    free = [dict(t, effort_hours=ideal_effort_hours(t, scenario))
-            for t in tasks if t.get("effort_hours")]
+    free = [t for t in tasks if t.get("effort_hours")]
 
     def evaluate(assignment, ordering):
+        # frictionless (busy={}) but with REAL skills — OPT's search over
+        # assignments naturally routes each task to its fastest eligible
+        # worker, so it stays a true upper bound (the agent's assignment is
+        # one point in this same search space).
         candidate = [dict(t, assignees=[a]) for t, a in zip(ordering, assignment)]
-        rows = task_view(candidate + fixed, start, horizon, busy_by_assignee={})
+        rows = task_view(candidate + fixed, start, horizon,
+                         busy_by_assignee={}, skills=skills)
         return task_value(rows, tv_cfg, horizon, start, workers=workers)
 
     # three ceilings tracked in ONE search pass: each metric gets its own

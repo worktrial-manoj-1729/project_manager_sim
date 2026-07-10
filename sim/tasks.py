@@ -115,7 +115,25 @@ def _schedulable(t):
             and t.get("source") != "agent")
 
 
-def compute_schedule(tasks, sim_start, busy_by_assignee=None):
+def _task_multiplier(t, skills):
+    """Speed factor for task t under its CURRENT primary assignee: geometric
+    mean of that person's skill factors over the task's matching tags (frozen
+    config; default 1.0 when either side is absent). >1 = the specialist works
+    it faster. HIDDEN from the PM — inferred only from how fast work actually
+    completes. So `m` calendar-minutes of work = `m` effort-minutes done."""
+    if not skills:
+        return 1.0
+    sk = skills.get(_primary(t)) or {}
+    tags = [tag for tag in (t.get("tags") or []) if tag in sk]
+    if not tags:
+        return 1.0
+    prod = 1.0
+    for tag in tags:
+        prod *= sk[tag]
+    return prod ** (1.0 / len(tags))
+
+
+def compute_schedule(tasks, sim_start, busy_by_assignee=None, skills=None):
     """Fully PREEMPTIVE, event-sourced scheduler. At every instant each person
     works their highest-priority READY task; the moment that changes — a
     higher-priority task arrives or unblocks, or the PM reprioritizes at a
@@ -139,8 +157,13 @@ def compute_schedule(tasks, sim_start, busy_by_assignee=None):
     for tid, t in sched.items():
         persons.setdefault(_primary(t), []).append(tid)
 
+    # remaining is CALENDAR-minutes = effort-minutes / skill-multiplier, so a
+    # faster specialist finishes sooner. mult is kept per task so progress
+    # readouts can convert calendar-work back to true effort-hours.
+    mult = {tid: _task_multiplier(sched[tid], skills) for tid in sched}
     remaining = {tid: max(0.0, round((sched[tid]["effort_hours"]
-                                      - sched[tid].get("done_hours", 0)) * 60.0))
+                                      - sched[tid].get("done_hours", 0))
+                                     * 60.0 / mult[tid]))
                  for tid in sched}
     segments = {tid: [] for tid in sched}
     done_at, started = {}, {}
@@ -208,25 +231,26 @@ def compute_schedule(tasks, sim_start, busy_by_assignee=None):
         clock = nxt
 
     return {tid: {"start": started.get(tid), "done_at": done_at.get(tid),
-                  "segments": segments[tid]}
+                  "segments": segments[tid], "mult": mult[tid]}
             for tid in sched}
 
 
 def _accrued_hours(seg_row, sim_start_seed, now, busy_by_assignee):
-    """True hours worked on a task by `now`: seed progress + the fold of its
-    work segments up to `now`."""
+    """True EFFORT-hours done on a task by `now`: seed progress + the fold of
+    its work segments up to `now`, converted from calendar-minutes back to
+    effort via the task's skill multiplier (m calendar-min = m effort-min)."""
     acc = 0.0
     for (s, e, pers) in seg_row["segments"]:
         if s >= now:
             break
         acc += work_minutes_between(s, min(e, now), busy_by_assignee.get(pers, ()))
-    return sim_start_seed + acc / 60.0
+    return sim_start_seed + acc * seg_row.get("mult", 1.0) / 60.0
 
 
-def task_view(tasks, sim_start, now, busy_by_assignee=None):
+def task_view(tasks, sim_start, now, busy_by_assignee=None, skills=None):
     """Ground-truth task states at `now`. Tasks not yet arrived are omitted."""
     busy_by_assignee = busy_by_assignee or {}
-    sched = compute_schedule(tasks, sim_start, busy_by_assignee)
+    sched = compute_schedule(tasks, sim_start, busy_by_assignee, skills)
     out = []
     for t in tasks:
         if t.get("arrival", sim_start) > now:
@@ -277,7 +301,7 @@ def task_view(tasks, sim_start, now, busy_by_assignee=None):
     return out
 
 
-def task_done(tasks, sim_start, now, task_id, busy_by_assignee=None):
-    sched = compute_schedule(tasks, sim_start, busy_by_assignee or {})
+def task_done(tasks, sim_start, now, task_id, busy_by_assignee=None, skills=None):
+    sched = compute_schedule(tasks, sim_start, busy_by_assignee or {}, skills)
     s = sched.get(task_id)
     return s is not None and s["done_at"] is not None and now >= s["done_at"]

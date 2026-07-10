@@ -244,6 +244,32 @@ def check_agent_tasks_free(_scenario):
     return True, "agent-created work consumes zero capacity (R unaffected, J unscheduled)"
 
 
+def check_skills(_scenario):
+    """A specialist (higher skill multiplier on the task's tags) finishes the
+    SAME task in proportionally less calendar time — and true progress still
+    reaches the full effort. Values are hidden from the PM; only the physics
+    are asserted here."""
+    from .tasks import compute_schedule, task_view
+    START = 540
+    base = {"id": "T", "title": "T", "assignees": ["slow"], "effort_hours": 2.0,
+            "tags": ["db"], "done_hours": 0, "arrival": START, "source": "seed",
+            "priority": "P1"}
+    skills = {"fast": {"db": 2.0}}     # 'slow' has no skills -> 1x
+    slow = compute_schedule([dict(base)], START, skills=skills)
+    fastt = dict(base, assignees=["fast"])
+    fast = compute_schedule([fastt], START, skills=skills)
+    slow_dur = slow["T"]["done_at"] - START
+    fast_dur = fast["T"]["done_at"] - START
+    if abs(fast_dur * 2 - slow_dur) > 2:
+        return False, "2x skill didn't halve time (slow=%d fast=%d)" % (slow_dur, fast_dur)
+    td = next(r["true_done_hours"] for r in task_view([fastt], START,
+              fast["T"]["done_at"], skills=skills) if r["id"] == "T")
+    if abs(td - 2.0) > 0.05:
+        return False, "specialist true_done=%.2f != effort 2.0 (progress miscount)" % td
+    return True, ("2x specialist finished in half the time (%d vs %d min), "
+                  "progress exact" % (fast_dur, slow_dur))
+
+
 CHECKS = [
     ("causality", check_causality),
     ("stops-at-push", check_stops_at_push),
@@ -252,6 +278,7 @@ CHECKS = [
     ("wait-for-reply", check_wait_for_reply),
     ("preemptive-resume", check_preemptive_resume),
     ("agent-tasks-free", check_agent_tasks_free),
+    ("skills", check_skills),
     ("harness-drive", check_harness_drives_to_horizon),
 ]
 
