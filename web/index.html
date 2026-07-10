@@ -312,6 +312,7 @@
           <span class="pn-move">dave → sarah</span><span style="margin-left:-12px">= PM moved it</span>
           <span class="pn-done">✓ shipped</span>
           <span class="pn-miss">✗ not shipped</span>
+          <span><b>x/y h</b> = hours already done at week start / total hours the task takes</span>
         </div>
         <div id="problem-scroll"><div id="problem-canvas">
           <svg id="problem-edges"></svg>
@@ -1169,7 +1170,9 @@ function renderProblem() {
     const p = String(t.priority || "").toUpperCase();
     const pCls = "pn-" + (PRIO_RANK[p] != null ? p.toLowerCase() : "p3");
     const eff = t.effort_hours == null ? "—"
-      : (t.done_hours ? `${t.done_hours}/${t.effort_hours}h` : `${t.effort_hours}h`);
+      : (t.done_hours
+         ? `<span title="${t.done_hours}h already done when the week starts, of ${t.effort_hours}h total (${t.effort_hours - t.done_hours}h left)">${t.done_hours}/${t.effort_hours}h</span>`
+         : `<span title="${t.effort_hours}h of work, none done yet">${t.effort_hours}h</span>`);
     const arr = seeded
       ? `<div class="pn-arr">${fmt(t.arrival)}</div>`
       : `<div class="pn-arr lands">lands ${fmt(t.arrival)} · ${t.via === "email" ? "✉" : "chat"}</div>`;
