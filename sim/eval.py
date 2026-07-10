@@ -76,12 +76,22 @@ class StubClient:
 
 
 def build_baseline(scenario, rubric, run_dir):
-    """Deterministic null-agent run: advance to horizon, take no actions."""
+    """Deterministic null-agent run: advance to horizon, take no actions.
+    Built in a UNIQUE temp dir, discarded afterwards: evaluations can run
+    concurrently (the hub's server threads poll while the harness scores)
+    and a shared runs/<id>/baseline path let them append to — or delete —
+    each other's event logs mid-write. The baseline world we need lives in
+    memory; the disk artifact was only ever a byproduct."""
+    import shutil
+    import tempfile
     from .engine import Engine
-    eng = Engine(scenario, client=StubClient(), verbose=False,
-                 run_dir=run_dir + "/baseline")
-    eng.advance_until(rubric["horizon"], max_events=2000)
-    return eng.world
+    tmp = tempfile.mkdtemp(prefix="pmsim-baseline-")
+    try:
+        eng = Engine(scenario, client=StubClient(), verbose=False, run_dir=tmp)
+        eng.advance_until(rubric["horizon"], max_events=2000)
+        return eng.world
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def evaluate(run_dir):

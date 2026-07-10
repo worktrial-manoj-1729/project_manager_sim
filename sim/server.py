@@ -93,11 +93,16 @@ class RunHub:
         self._cache = {}  # rid -> (mtime_key, record)
 
     def _agent_cost(self, d):
-        """Agent-side tokens -> $ from llm.jsonl (kind=agent_turn only)."""
+        """Agent-side tokens -> $ from llm.jsonl (kind=agent_turn only). Prices
+        PROMPT-CACHE tokens correctly: a cache READ bills 0.1x input, a cache
+        WRITE 1.25x — so a cached run's cost isn't undercounted just because its
+        `input_tokens` (uncached-only) went to ~nothing. `tin` reported is the
+        effective input volume (uncached + read + write) for the tokens column."""
         lp = os.path.join(d, "llm.jsonl")
         if not os.path.exists(lp):
             return None, 0, 0, 0
         tin = tout = turns = 0
+        cost_in = 0.0
         model = None
         with open(lp) as f:
             for line in f:
@@ -106,12 +111,18 @@ class RunHub:
                 e = json.loads(line)
                 turns += 1
                 model = e.get("model")
-                tin += e["usage"]["input_tokens"]
-                tout += e["usage"]["output_tokens"]
+                u = e["usage"]
+                raw = u["input_tokens"]
+                rd = u.get("cache_read_input_tokens", 0) or 0
+                wr = u.get("cache_creation_input_tokens", 0) or 0
+                pin, _ = PRICES.get((model or "").split(" ")[0], (0.0, 0.0))
+                cost_in += (raw + wr * 1.25 + rd * 0.1) / 1e6 * pin
+                tin += raw + rd + wr
+                tout += u["output_tokens"]
         if turns == 0:
             return 0.0, 0, 0, 0  # scripted/null: zero agent cost
-        pin, pout = PRICES.get((model or "").split(" ")[0], (0.0, 0.0))
-        return round(tin / 1e6 * pin + tout / 1e6 * pout, 4), tin, tout, turns
+        _, pout = PRICES.get((model or "").split(" ")[0], (0.0, 0.0))
+        return round(cost_in + tout / 1e6 * pout, 4), tin, tout, turns
 
     def list_runs(self):
         import glob
@@ -171,8 +182,11 @@ class RunHub:
                             fairness = sc["workload_fairness"].get("agent")
                         if isinstance(sc.get("combined"), dict):
                             band = sc["combined"].get("available")
-                    except Exception:
-                        pass   # live/in-progress or un-scorable run — no score
+                    except Exception as ex:
+                        # a live run scoring mid-flight is normal; a FINISHED
+                        # run failing is not — say so, and never cache it
+                        print("hub: could not score %s: %r" % (rid, ex))
+                        score = None
                 n = 0
                 if os.path.exists(ep):
                     with open(ep) as f:
@@ -184,7 +198,11 @@ class RunHub:
                        "efficiency": efficiency, "done_rate": done_rate,
                        "fairness": fairness, "cost_usd": cost,
                        "tokens_in": tin, "tokens_out": tout, "agent_turns": turns}
-                self._cache[rid] = (key, rec)
+                if score is not None:
+                    # never cache a failed/incomplete scoring: the key's
+                    # files stop changing once a run ends, so a cached None
+                    # would be served forever
+                    self._cache[rid] = (key, rec)
             rec["live"] = (os.path.exists(ep)
                            and (_t.time() - os.path.getmtime(ep)) < 90
                            and rec["score"] is None)

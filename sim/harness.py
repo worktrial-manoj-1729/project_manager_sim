@@ -136,6 +136,36 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
                  % engine.world.now()}]
     turns = []
 
+    # PROMPT CACHING (cost only — cached tokens yield identical outputs, so
+    # determinism / per-policy reward are untouched). The system prompt and the
+    # whole tool list are a large static prefix, cached once; and because the
+    # transcript is APPEND-ONLY, a moving breakpoint on the latest message lets
+    # each turn re-read the growing conversation from cache (~0.1x) instead of
+    # re-billing it in full. On a 158-turn week that's ~78% off the input bill.
+    ck = {"type": "ephemeral"}
+    system_blocks = [{"type": "text", "text": system, "cache_control": ck}]
+    tools_cached = [dict(t) for t in tools]
+    if tools_cached:
+        tools_cached[-1] = {**tools_cached[-1], "cache_control": ck}
+
+    def _cache_last():
+        """Put ONE ephemeral breakpoint on the last message (clearing prior
+        message breakpoints so we stay under the 4-block cap with system+tools),
+        caching the entire conversation prefix. Skips assistant turns whose
+        content is raw SDK blocks (rare: a yield with no push) — those still get
+        the system+tools cache."""
+        for m in messages:
+            c = m.get("content")
+            if isinstance(c, list):
+                for b in c:
+                    if isinstance(b, dict):
+                        b.pop("cache_control", None)
+        c = messages[-1]["content"]
+        if isinstance(c, str):
+            messages[-1]["content"] = [{"type": "text", "text": c, "cache_control": ck}]
+        elif isinstance(c, list) and c and isinstance(c[-1], dict):
+            c[-1] = {**c[-1], "cache_control": ck}
+
     # THE TRANSCRIPT: the agent's whole conversation in OpenAI chat format
     # (system / user / assistant+tool_calls / tool), one JSON line per
     # message, UNTRUNCATED — the model may see clipped tool results
@@ -156,10 +186,11 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
         notifications ride back in each tool_result). Returns True if the
         agent acted, False if it emitted no tool calls (a yield)."""
         t0 = wall_now()
+        _cache_last()
         try:
             response = client.messages.create(
-                model=model, max_tokens=8000, system=system, tools=tools,
-                messages=messages, **_agent_thinking(model))
+                model=model, max_tokens=8000, system=system_blocks,
+                tools=tools_cached, messages=messages, **_agent_thinking(model))
         except anthropic.APIError as e:
             print("agent LLM error (%s) — ending run gracefully" % type(e).__name__)
             return None
@@ -169,7 +200,11 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
             "model": model, "latency_ms": int((wall_now() - t0) * 1000),
             "stop_reason": response.stop_reason,
             "usage": {"input_tokens": response.usage.input_tokens,
-                      "output_tokens": response.usage.output_tokens},
+                      "output_tokens": response.usage.output_tokens,
+                      "cache_creation_input_tokens":
+                          getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+                      "cache_read_input_tokens":
+                          getattr(response.usage, "cache_read_input_tokens", 0) or 0},
             "response_text": "".join(getattr(b, "text", "") for b in response.content
                                      if b.type == "text"),
             "tool_calls": [{"name": b.name, "input": b.input}
