@@ -38,7 +38,8 @@ def load_rubric(scenario, run_dir=None):
     raise SystemExit("no rubric found (rubrics/ file or inline 'evaluation')")
 
 
-def task_value(task_rows, cfg, horizon, sim_start, workers=None):
+def task_value(task_rows, cfg, horizon, sim_start, workers=None,
+               busy_hours=None):
     """TWO first-class metrics over a tasks_view snapshot:
 
       completion = Σ w · (progress + α·done)/(1+α)      — did the work get done
@@ -86,7 +87,11 @@ def task_value(task_rows, cfg, horizon, sim_start, workers=None):
     utilization, utilization_std, workload_fairness = None, None, None
     if workers:
         avail_h = working_minutes_between(sim_start, horizon) / 60.0
-        worked = dict.fromkeys(workers, 0.0)
+        # a person's LOAD = task hours worked + busy hours (meetings and
+        # interruption taxes, supplied by the caller from world physics) —
+        # without the busy term, burying someone in sessions reads as
+        # "fair" while actually consuming their week
+        worked = {w: (busy_hours or {}).get(w, 0.0) for w in workers}
         for t in task_rows:
             if t.get("source") == "agent" or not t.get("effort_hours"):
                 continue

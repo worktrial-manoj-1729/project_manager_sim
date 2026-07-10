@@ -45,7 +45,8 @@ def scoring_version():
     scorecard scare; the aggregator `sim.bench` always re-scores regardless.)"""
     h = hashlib.sha256()
     here = os.path.dirname(__file__)
-    for name in ("tasks.py", "rubric.py", "optimal.py", "eval.py"):
+    for name in ("tasks.py", "rubric.py", "optimal.py", "eval.py",
+                 "world.py", "replay.py"):
         try:
             with open(os.path.join(here, name), "rb") as f:
                 h.update(f.read())
@@ -83,6 +84,27 @@ def build_baseline(scenario, rubric, run_dir):
     return eng.world
 
 
+def busy_hours(world, start, horizon):
+    """Per-person hours of meetings + interruption taxes inside the graded
+    window, overlap-merged — the busy load utilization must count."""
+    out = {}
+    for person, spans in world.busy_by_assignee().items():
+        clipped = sorted((max(s, start), min(e, horizon))
+                         for s, e in spans if e > start and s < horizon)
+        total, cur_s, cur_e = 0, None, None
+        for s, e in clipped:
+            if cur_e is None or s > cur_e:
+                if cur_e is not None:
+                    total += cur_e - cur_s
+                cur_s, cur_e = s, e
+            else:
+                cur_e = max(cur_e, e)
+        if cur_e is not None:
+            total += cur_e - cur_s
+        out[person] = round(total / 60.0, 2)
+    return out
+
+
 def evaluate(run_dir):
     scenario, events = load_run(run_dir)
     rubric = load_rubric(scenario, run_dir)
@@ -95,9 +117,11 @@ def evaluate(run_dir):
 
     workers = worker_ids(scenario)
     v_agent = task_value(agent_world.tasks_view(at=horizon), tv_cfg, horizon,
-                         start, workers=workers)
+                         start, workers=workers,
+                         busy_hours=busy_hours(agent_world, start, horizon))
     v_base = task_value(baseline_world.tasks_view(at=horizon), tv_cfg, horizon,
-                        start, workers=workers)
+                        start, workers=workers,
+                        busy_hours=busy_hours(baseline_world, start, horizon))
     opt = opt_ideal(scenario, rubric)
 
     def ladder(metric, opt_key):

@@ -186,7 +186,9 @@ def stamp(path):
         scenario = json.load(f)
     scenario.pop("band", None)  # never fingerprint a stale stamp
     fp = fingerprint(scenario)
+    from .eval import scoring_version
     scenario["band"] = {
+        "scored_with": scoring_version(),   # stale stamps self-identify
         "no_pm_baseline": fp["baseline_raw"],
         "opt_max": fp["opt_raw"],
         "winnable_combined": fp["winnable_combined"],

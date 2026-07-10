@@ -52,6 +52,38 @@ class TestBandAnchors(unittest.TestCase):
                                    delta=slack)
 
 
+class TestUtilizationSeesBusyLoad(unittest.TestCase):
+    def test_meetings_count_as_load(self):
+        """Regression: utilization/fairness once ignored meetings entirely —
+        a PM could bury someone in sessions and still read as 'fair'."""
+        from sim.eval import busy_hours
+        quiet = make_engine()
+        goto(quiet, HORIZON)
+        loaded = make_engine()
+        call_tool(loaded, "schedule_meeting",
+                  {"attendees": ["ana"], "start_in_minutes": 30,
+                   "duration_minutes": 120, "topic": "sync"})
+        goto(loaded, HORIZON)
+        rq = evaluate(quiet.run_dir)
+        rl = evaluate(loaded.run_dir)
+        self.assertGreater(rl["utilization"]["ana"],
+                           rq["utilization"]["ana"])
+        # and the helper is exact: 120 meeting-minutes = 2.0 busy hours
+        bh = busy_hours(loaded.world, 545, HORIZON)
+        self.assertGreaterEqual(bh.get("ana", 0), 2.0)
+
+    def test_busy_hours_merges_overlaps(self):
+        """Overlapping spans (a meeting plus a chat tax inside it) must not
+        double-count."""
+        from sim.eval import busy_hours
+
+        class W:
+            def busy_by_assignee(self):
+                return {"ana": [(600, 720), (700, 760)]}   # overlap 700-720
+        self.assertEqual(busy_hours(W(), 545, 6780)["ana"],
+                         round((760 - 600) / 60.0, 2))
+
+
 class TestGates(unittest.TestCase):
     def test_valid_fixture_passes(self):
         self.assertEqual(validate_scenario(scenario()), [])

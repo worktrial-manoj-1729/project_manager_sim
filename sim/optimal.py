@@ -156,8 +156,34 @@ def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
                       for combo in itertools.product(workers, repeat=len(free))]
         searched = n_combos
     else:
-        candidates = _greedy_assignments(free, workers, skills, weights)
-        searched = -len(candidates)   # negative flags the greedy path
+        # greedy seeds, then HILL-CLIMB (single-owner reassignment moves) to a
+        # local optimum — the raw 2-candidate greedy underestimated the true
+        # optimum by ~9%, tight enough to matter for the difficulty gate and for
+        # reading normalized>1. Local search recovers most of that gap cheaply.
+        ord0 = orderings[-1]
+        ids = [t["id"] for t in free]
+        candidates = list(_greedy_assignments(free, workers, skills, weights))
+        n_eval = 0
+        for seed in list(candidates):
+            cur = dict(seed)
+            curv = evaluate(cur, ord0)["combined"]
+            n_eval += 1
+            for _ in range(8):   # capped sweeps; converges well before this
+                improved = False
+                for tid in ids:
+                    for w in workers:
+                        if w == cur[tid]:
+                            continue
+                        v = evaluate(dict(cur, **{tid: w}), ord0)["combined"]
+                        n_eval += 1
+                        if v > curv + 1e-9:
+                            cur[tid] = w
+                            curv = v
+                            improved = True
+                if not improved:
+                    break
+            candidates.append(cur)
+        searched = -n_eval   # negative flags the greedy+local-search path
 
     best = {"completion": (-1.0, None), "efficiency": (-1.0, None),
             "done_weight_rate": (-1.0, None), "combined": (-1.0, None, None)}
