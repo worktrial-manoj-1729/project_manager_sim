@@ -162,10 +162,11 @@ draws keyed by (seed, id).</div>
 <span class="c">10:00</span> ping Sarah
 <span class="c">10:01</span> ping again
 <span class="c">10:02</span> ping again
-→ she answers in 5–45 min
-→ but loses <b class="red">3 × 20 min</b>
-  of deep-work focus</div>
-      <p class="cap">interruptions stack — they don't overlap</p>
+→ answers in 5–45 min  <span class="c">(seeded delay)</span>
+→ each ping costs a <b class="red">10-min</b> refocus
+  tax <span class="c">(chat_interrupt_minutes)</span>, and
+  they STACK: <b class="red">3 × 10 = 30 min</b> lost</div>
+      <p class="cap">the tax is a config knob; taxes stack, they don't overlap</p>
     </div>
     <div>
       <div class="ex"><b class="green">email</b>
@@ -174,19 +175,20 @@ draws keyed by (seed, id).</div>
       next inbox pass
 → slower answer
 → <b class="green">zero focus cost</b></div>
-      <p class="cap">async by social contract; the agent's own inbox check fires every 30 min</p>
+      <p class="cap">answered at her next inbox pass; the agent's own inbox batches every <b>30 min</b> <span class="sub">(email_batch_minutes, config)</span></p>
     </div>
     <div>
       <div class="ex"><b class="violet">meeting</b>
 <span class="c">14:00</span> 1h sync, 4 people
 → instant answers, minutes kept
-→ costs the org
-  <b class="red">4 person-hours</b></div>
+→ <b>1h × 4 people</b> off their
+  own work = <b class="red">4 person-hours</b></div>
       <p class="cap">the most expensive artifact in any company</p>
     </div>
   </div>
-  <p class="foot">These numbers appear in no tool description. Agents learn them three ways:
-  timestamps, complaints from over-pinged coworkers, or lower scores.</p>
+  <p class="foot">Every number here is a <b>config knob</b> (the taxes/batches) or a <b>seeded draw</b>
+  (reply delays) — none appear in any tool description. Agents learn them three ways: timestamps,
+  complaints from over-pinged coworkers, or lower scores.</p>
 </section>
 
 <!-- 3b · no channel dominates -->
@@ -228,13 +230,10 @@ meet  → 3 person-hours for
 path; Sarah alone misses Fri.
 
 2h working session, Sarah+Dave:
-  Sarah's skill here   <b>1.3×</b>  <span class="c">(db)</span>
-  + Dave, 2nd hand  <b>0.6 × 1.0</b>
-    <span class="c">2nd person's ½-ish weight ×</span>
-    <span class="c">Dave's 1.0 skill (not db)</span>
-  = pooled rate        <b class="green">1.9×</b>
-  2h × 1.9 = <b class="green">3.8h</b> of work,
-  banked at meeting-end → <b>ships Thu</b>
+  1st hand  Sarah  <b>1.0 &#215; 1.3</b> = 1.3  <span class="c">full weight &#215; her db skill</span>
+  2nd hand  Dave   <b>0.6 &#215; 1.0</b> = 0.6  <span class="c">weight 0.6 &#215; his 1.0 (no db)</span>
+  pooled = 1.3 + 0.6 = <b class="green">1.9&#215;</b>  <span class="c">(3rd hand would add 0.36&#215;…)</span>
+  banked = 2h &#215; 1.9 = <b class="green">3.8h</b> at meeting-end → <b>ships Thu</b></div>
 
 <span class="c">chat/email move words, not work —
 only a room adds a 2nd pair of hands.</span></div>
@@ -358,40 +357,38 @@ what the agent can notice:
 <!-- 8 · putting more than one person on a task -->
 <section class="slide">
   <div class="kicker">3 · skills — more than one person on a task</div>
-  <h2>More hands help — but only a meeting makes them count</h2>
+  <h2>Two ways to add hands to a task — parallel, or a meeting</h2>
   <div class="cols">
     <div>
       <div class="ex">migration is the bottleneck (Sarah's, db).
-three ways to add Dave:
+Sarah solo → <b>1.3×</b>.   two ways to add Dave:
 
-<b>solo</b> Sarah                  → 1.3×
-<b>+Dave, no meeting</b>           → <b class="amber">1.5×</b>
-   <span class="c">both hack at one task, uncoordinated —
-   they conflict &amp; duplicate. barely helps.</span>
-<b>+Dave, 2h session</b> on the task → <b class="green">1.9×</b>
-   <span class="c">1.3 + 0.6×1.0, banked at meeting-end.
-   the sync is what makes his hands land.</span></div>
-      <p class="cap">solo &lt; parallel &lt; meeting — the meeting <b>buys</b> that last jump.</p>
+<b>1) parallel — no meeting</b>   → <b class="amber">1.5×</b>
+   <span class="c">both work it at once but uncoordinated:
+   conflict &amp; duplicate, so the 2nd hand
+   adds only a little (Brooks).</span>
+<b>2) a 2h working session</b>    → <b class="green">1.9×</b>
+   <span class="c">the meeting SYNCS them (1.3 + 0.6×1.0),
+   banked at meeting-end — hands land.</span></div>
+      <p class="cap"><b>Both</b> help; the meeting <b>buys</b> the jump from 1.5 to 1.9 — paid for in
+      everyone's time in the room.</p>
     </div>
     <div>
-      <div class="ex">the fine print:
-  hands cap out — 1, 0.6, 0.36, …
-  parallel <b>≤ 1.5×</b>, meeting <b>≤ 2.5×</b>
-  never linear in headcount.
+      <div class="ex">the rule — <b>capped-additive pooling</b>:
+  c = each person's skill on the task's
+      tags (geomean; <b>1.0</b> if no skill there)
+  sort high→low:  c&#8321; &#8805; c&#8322; &#8805; …
+  <b>rate = c&#8321; + 0.6&#183;c&#8322; + 0.36&#183;c&#8323; + …</b>
+  then cap:  parallel <b>1.5</b>, meeting <b>2.5</b>
+  <span class="c">so Sarah(1.3)+Dave(1.0): 1.3 + 0.6&#183;1.0
+  = 1.9 (meeting) ; capped at 1.5 (parallel)</span>
 
 the bill (either way):
-  each person on Sarah's task has
-  their <b class="red">own queue frozen</b> meanwhile.
-
-meetings are rate-limited PER PERSON:
-  <b class="red">≤ 180 meeting-min / day</b> each,
-  and none can be booked over an
-  <b class="red">out-of-office</b> block (PTO / other
-  project) — you can't swarm people
-  who aren't there.
-
-<span class="c">→ worth it for a real bottleneck or an
-  idle teammate; a net loss otherwise.</span></div>
+  every helper's <b class="red">own queue is frozen</b>.
+meetings are capped PER PERSON:
+  <b class="red">&#8804; 180 min/day</b>, and none over an
+  <b class="red">out-of-office</b> block — can't swarm
+  people who aren't there.</div>
     </div>
   </div>
   <p class="foot">“Adding manpower to a late software project makes it later.” — Fred Brooks,
@@ -455,7 +452,7 @@ value ← <b>max</b> combined over all</div>
     <tr><th>lever</th><th>turning it up means</th><th>what gets harder</th></tr>
     <tr><td><b>capacity pressure</b></td><td>more work-hours vs the team's week</td>
         <td>slack disappears; every misstep costs a deliverable</td></tr>
-    <tr><td><b>default-owner wrongness</b></td><td>every arrival lands on the same volunteer</td>
+    <tr><td><b>default-owner wrongness</b></td><td>arrivals land on a <b>sub-optimal owner</b> (often the busiest)</td>
         <td>reallocation goes from nice-to-have to the whole job</td></tr>
     <tr><td><b>dependency chains</b></td><td>longer must-finish-before paths</td>
         <td>one slip cascades down the critical path</td></tr>
@@ -477,7 +474,7 @@ value ← <b>max</b> combined over all</div>
 <!-- 10 · rubrics: metrics + evidence -->
 <section class="slide">
   <div class="kicker">4 · the rubrics — what is measured</div>
-  <h2>Outcomes only — and it already separates models</h2>
+  <h2>Outcomes only — and we can measure what it teaches</h2>
   <div class="ex" style="white-space:pre; overflow-x:auto; margin-bottom:2.4vh">COMPLETION = Σ w·(progress + α·done)/(1+α)        <span class="c">the work got done</span>
 EFFICIENCY = Σ w·done·(horizon − done_at)/span    <span class="c">…and landed early</span>
 COMBINED   = (COMPLETION + γ·EFFICIENCY)/(1+γ)    <span class="c">the reward scalar</span>
@@ -511,9 +508,7 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
       <p class="cap">Not asserted — <b style="color:var(--ink)">measured</b>: an ablation audit plays
       policies differing in one decision; the score it loses = that decision's share of the band.
       <b>bigweek</b> spreads the signal across three levers; a one-bit task would pile it on one row.</p>
-      <p class="cap">Separates models (no keywords/judge): sonnet Max@3 <b class="green">+0.79</b>,
-      opus peak <b class="green">0.96</b>. The 21-task <b>bigweek</b> lands opus at
-      <b class="amber">0.58</b> — mid-band, headroom to learn — over <b>158 turns</b>.</p>
+
     </div>
   </div>
 </section>
