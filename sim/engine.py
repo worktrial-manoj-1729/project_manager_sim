@@ -438,7 +438,10 @@ class Engine:
                          and log[-1]["recipient"] == "agent"
                          and log[-1].get("via", "chat") == "chat")
                         or log[-1]["kind"] == "email_delivered"):
-                return log[-1]
+                msg = log[-1]
+                # CAUSALITY: drain co-temporal events before returning control
+                self._drain_due()
+                return msg
         return None
 
     def advance_until(self, target, max_events=1000, interruptible=False):
@@ -466,7 +469,10 @@ class Engine:
             if interruptible and any(
                     "chat_from" in i or "email_from" in i or "in_meeting" in i
                     for i in self._push_items(self.world.log[self._push_cursor:])):
-                self._check_completions()
+                # CAUSALITY: being woken must not leave co-temporal events
+                # undispatched — everything due at this instant happens
+                # before the agent gets control back.
+                self._drain_due()
                 return fired
         else:
             self.logger.warning("advance_until hit max_events=%d before "
