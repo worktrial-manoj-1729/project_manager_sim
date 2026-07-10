@@ -136,6 +136,21 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
                  % engine.world.now()}]
     turns = []
 
+    # THE TRANSCRIPT: the agent's whole conversation in OpenAI chat format
+    # (system / user / assistant+tool_calls / tool), one JSON line per
+    # message, UNTRUNCATED — the model may see clipped tool results
+    # (MAX_RESULT_CHARS), but the evaluation record keeps everything.
+    tpath = os.path.join(engine.run_dir, "transcript.jsonl")
+
+    def tlog(entry):
+        entry["sim_t"] = engine.world.clock
+        entry["sim_t_fmt"] = engine.world.now()
+        with open(tpath, "a") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+
+    tlog({"role": "system", "content": system})
+    tlog({"role": "user", "content": messages[0]["content"]})
+
     def do_turn():
         """One agent LLM call. Executes its tool calls (their push
         notifications ride back in each tool_result). Returns True if the
@@ -160,6 +175,15 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
             "tool_calls": [{"name": b.name, "input": b.input}
                            for b in response.content if b.type == "tool_use"]})
         tool_uses = [b for b in response.content if b.type == "tool_use"]
+        tlog({"role": "assistant",
+              "thinking": "".join(getattr(b, "thinking", "")
+                                  for b in response.content
+                                  if b.type == "thinking") or None,
+              "content": "".join(getattr(b, "text", "")
+                                 for b in response.content
+                                 if b.type == "text"),
+              "tool_calls": [{"id": b.id, "name": b.name, "arguments": b.input}
+                             for b in tool_uses]})
         if not tool_uses:
             safe = [b for b in response.content if b.type in ("text", "thinking")]
             if safe:
@@ -171,6 +195,9 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
             result = call_tool(engine, tu.name, tu.input)
             turns.append({"tool": tu.name, "args": tu.input,
                           "ok": not (isinstance(result, dict) and "error" in result)})
+            # transcript keeps the FULL output; the model sees a clipped copy
+            tlog({"role": "tool", "tool_call_id": tu.id, "name": tu.name,
+                  "content": result})
             payload = json.dumps(result, default=str)
             if len(payload) > MAX_RESULT_CHARS:
                 payload = payload[:MAX_RESULT_CHARS] + "…(truncated)"
@@ -180,13 +207,14 @@ def run_llm(engine, max_turns=SAFETY_TURNS, model=DEFAULT_AGENT_MODEL):
         return True
 
     def deliver_push(woke):
-        messages.append({"role": "user", "content":
-                         "It is %s — something reached you while you were "
-                         "waiting:\n%s\nThe week is not over. Handle it with "
-                         "your tools (remember: only add_task / assign_task / "
-                         "etc. change outcomes — talking does not). When "
-                         "genuinely nothing is left, stop."
-                         % (engine.world.now(), json.dumps(woke, default=str))})
+        text = ("It is %s — something reached you while you were "
+                "waiting:\n%s\nThe week is not over. Handle it with "
+                "your tools (remember: only add_task / assign_task / "
+                "etc. change outcomes — talking does not). When "
+                "genuinely nothing is left, stop."
+                % (engine.world.now(), json.dumps(woke, default=str)))
+        tlog({"role": "user", "content": text})
+        messages.append({"role": "user", "content": text})
 
     # -- drive the whole week in ONE loop: act -> (on yield) roll time forward
     # interruptibly -> a push wakes the PM -> act, until Friday. No turn

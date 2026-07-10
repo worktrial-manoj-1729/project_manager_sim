@@ -120,8 +120,7 @@ seeded fuzzing with invariants asserted after every action):
 | `npc_respond` | chat latency rule at delivery (seeded per-NPC RNG, 5–45 min in-hours, deferred past meetings) | one LLM call → reply |
 | `npc_wakeup` | self-rescheduling heartbeat (~90–150 min, working hours) | answers the email batch; reschedules itself |
 | `email_delivery` | sending email to the PM | the batched push: delivers to the PM at the next `email_batch_minutes` grid tick (default 30) |
-| `task_arrival` | scenario `task_arrivals[]` | creates the *need* (truth, unfiled) + the announcement message (chat or email) carrying a rules-appended `(ticket: id)` |
-| `org_pickup` | each arrival's authored `fallback {npc, at}` | if still unowned: the volunteer takes it (assigned, filed, tracker-noted, `source: org`) |
+| `task_arrival` | scenario `task_arrivals[]` | the task lands **already owned** by its default holder (on the board, `assigned_at` = arrival, worked from that instant) + an announcement (chat or email) carrying a rules-appended `(ticket: id, currently on X)` |
 | `belief_update` | authored `belief[]` schedules on tasks | corrects the holder's honest picture; optional proactive confession ping |
 | `beat` | scenario `beats[]` | deterministic IF-chain over world truth picks an arm; the LLM only voices the chosen intent |
 | `meeting_start` / `meeting_end` / `room_turn` | `schedule_meeting` | live rooms: speak-or-PASS NPC turns, verbatim minutes broadcast at end |
@@ -152,7 +151,7 @@ stamps every logged signal with its `delivery`, so runs are self-describing:
 | chat | push | **push** | instant; interrupts — NPC pays the serialized focus tax; the PM is woken mid-advance |
 | email | push | **push (batched)** | delivered by event on the recipient's cadence: NPC wakeups / the PM's batch grid. Delayed, zero tax |
 | meeting invite / room line / minutes / doc share | push | push | calendar, live room, broadcast at end, shared stream |
-| task added to board | push | **pull** | the board shows only *filed* tasks; anyone must check it |
+| task added to board | push | **pull** | arrivals land on the board with their default owner; anyone must check it |
 | board edit | push | pull | exception: an assignment also notifies the assignee |
 | completion | push (auto) | push | the one public reliable broadcast; never wakes |
 | holder belief | — (pull) | — | surfaced only when asked, or at an authored confession ping |
@@ -202,12 +201,15 @@ rollouts, which needs no explicit knowledge at all).
 ### Task origins
 
 1. **Seed** — `project.tasks`, arrival = sim start.
-2. **External (OOD)** — `task_arrivals[]`: the arrival creates the *need*
-   (truth) but writes nothing to the tracker. The ask reaches the PM as
-   communication (chat or email announcement with a deterministic
-   `(ticket: id)` reference). **The PM must file it** (`add_task` with that
-   id) before it appears on the board or can be assigned. Filing mints
-   nothing; an unfiled ticket sits at zero progress forever.
+2. **External (OOD)** — `task_arrivals[]`: **real work always has an
+   owner.** An arrival lands already assigned to a default holder (a
+   validated worker), on the board, worked from the instant it lands
+   (`assigned_at` = arrival). The default is often *wrong* — the swamped
+   volunteer, the wrong specialist — and the announcement that reaches the
+   PM (chat or email, with a rules-appended
+   `(ticket: id, currently on X)`) is the cue to REARRANGE, not to file.
+   There is no unowned backlog and no filing step: the PM's levers are
+   `assign_task` (move it) and `reprioritize` (reorder it).
 3. **Agent** — made-up tasks are trackable but carry **zero rubric weight**
    (the anti-minting guard) while still consuming real capacity if staffed.
 
@@ -243,18 +245,20 @@ resulting work segments, so true progress is answerable at any instant.
   so OPT stays a true upper bound); the runtime lookup lands with the
   scenario generator.
 
-### The org fallback: the baseline is not a strawman
+### The default-owner baseline: not a strawman
 
-A no-PM team still functions — badly. If an arrival is still unowned at its
-authored `fallback.at`, the natural volunteer grabs it (assigned, filed,
-tracker-noted). **Same physics in every run**, so the null baseline includes
-the org's self-organization, and the PM earns credit only for what
-coordination adds: better owners, acting before the fallback, spreading
-load the volunteer won't. Authoring rule: the org reacts fast to urgent
-incidents (hours) and slowly to cross-team paperwork (days) — that latency
-gap, and the volunteer's overload, is where PM value lives. Measured
-gradient on `demo`: lazy 0.000, Friday-scramble reassignment ~0.04, prompt
-file+assign+spread ~0.91.
+A no-PM team still functions — badly. Every arrival's default holder works
+it from the moment it lands, in sensible personal priority order, with
+preemption. **Same physics in every run**, so the null baseline is a
+complete unmanaged org, and the PM earns credit only for what coordination
+adds: moving work off the overloaded volunteer, reordering queues, keeping
+noise off people's focus. The corollary is sharp: under preemptive
+scheduling, a scenario whose defaults happen to be adequate has an EMPTY
+band (OPT == baseline — the original hand-authored `demo` went degenerate
+exactly this way when this contract landed). Band width = how wrong the
+default ownership is; the generator's `pileup` knob and effort multipliers
+author that wrongness deliberately, and the band gate rejects instances
+where the org didn't need a PM.
 
 ### The labor pool binds both sides
 
@@ -371,10 +375,11 @@ graded at a fixed horizon, no checks, no keywords, no LLM anywhere:
 
 Each is a ladder **baseline ≤ agent ≤ OPT_ideal**:
 
-- **Baseline** = the same scenario with a do-nothing agent (stub LLM), org
-  fallback included — a complete unmanaged team, not a strawman. Score 0
-  means "added nothing beyond it"; negative means the agent's activity
-  (focus taxes, meetings, busywork) made the world worse.
+- **Baseline** = the same scenario with a do-nothing agent (stub LLM):
+  default owners work every arrival from the moment it lands — a complete
+  unmanaged team, not a strawman. Score 0 means "added nothing beyond it";
+  negative means the agent's activity (focus taxes, meetings, busywork)
+  made the world worse.
 - **OPT_ideal** (`sim/optimal.py`) = frictionless exhaustive search over
   worker assignments: communication free, skills at the best clamped rate,
   no interruptions. A pure function of the scenario file — the stable
@@ -422,22 +427,33 @@ iteration, zero LLM cost:
 4. **Intent audit** (`sim/intent.py`): a task is authored with an intent —
    the decisions a winning PM must make — and the audit *proves it
    causally* by playing deterministic policy ablations (oracle / late /
-   no-spread / noisy) and measuring each mechanism's **share of the band**.
-   A share ≈ 0 means the task doesn't teach that skill; one mechanism
-   owning everything means a one-bit task. Current ladder: `demo` is a
-   timing task (preempt-the-fallback owns 0.999 of the band), `demo_2` is
-   a full coordination task (timing 0.70 / allocation 0.37 / channel
-   discipline 0.29, forced triage, band 5.14).
-5. **Hardness is measured, never asserted**: scenario names are neutral
-   (`demo_1`, `demo_2`); the empirical probe ladder (score degradation
-   across models) is the ground truth the fingerprint must be calibrated
-   against, and the dashboard colors tasks by band gap (VIBGYOR) so the
-   difficulty axis is visible at a glance.
+   noisy) and measuring each mechanism's **share of the band**: allocation
+   (owner correction), timing (rearrange early vs a day late), channel
+   discipline (the focus tax). A share ≈ 0 means the task doesn't teach
+   that skill; one mechanism owning everything means a one-bit task.
+   Degenerate scenarios are reported as such instead of audited.
+5. **The generator** (`sim/generate.py`) closes the loop —
+   `python -m sim.generate scenarios/demo.json --tier hard --n 5`:
+   seeded, LLM-free remixing of a template's *physics* (efforts, arrival
+   times, ticket ids, default owners via the `pileup` knob, belief errors,
+   NPC latency seed), with every draw keyed by (template, tier, seed) and
+   materialized into the emitted file. Each candidate runs the full gate
+   (validate → fairness → tier band) and gets stamped; mis-tuned knobs
+   cost attempts, never bad instances. This is how the system grows to
+   many scenarios without prompt spaghetti or hand-authored one-offs: the
+   template carries the fiction once, the generator mints difficulty-tuned
+   instances from it.
+6. **Hardness is measured, never asserted**: scenario names are neutral;
+   the empirical probe ladder (score degradation across models) is the
+   ground truth the fingerprint must be calibrated against, and the
+   dashboard colors tasks by band gap (VIBGYOR) so the difficulty axis is
+   visible at a glance.
 
-Band width is itself an authored property: it equals the size of the org's
-failure without a PM. A scenario whose fallback merely delays work has a
-timing-only band (~0.75); one whose overloaded volunteer lets P1s die has a
-delivery band (~5+) where "what ships" is at stake.
+Band width is itself an authored property: under the owned-arrivals
+contract it equals **how wrong the default ownership is** — a week whose
+defaults are adequate has nothing for a PM to win (and the gate rejects
+it); a week where every arrival pancakes onto one volunteer while a
+colleague idles has a wide band where allocation is the skill.
 
 ## 12. The harness
 
@@ -484,7 +500,7 @@ scenarios never breaks the suite).
 
 - **Example tests** pin every bug class hit during development: replay
   dropping message fields, retroactive assignment, priority-blind queues,
-  crash-on-unknown-recipient, fallback double-fires, truth leaks in tool
+  crash-on-unknown-recipient, unowned arrivals, truth leaks in tool
   returns, unfair arrivals, value minting, the odds identity.
 - **Property tests** guard the DES claims under seeded random
   interleavings — causality, monotonicity, liveness, replay equality,

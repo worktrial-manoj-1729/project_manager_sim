@@ -7,8 +7,11 @@ LLM calls, fully deterministic.
 Cast: two workers (ana, bo) + one stakeholder (vp, worker:false).
 Seeds: core (P0, ana, 20h/8 done, belief 60% -> confession at Tue 09:20),
        side (P2, bo, 6h).
-Arrivals: incident (P1 urgent, chat Tue 10:00, fallback bo Tue 12:40),
-          form (P1, email Wed 11:00 -> batch tick 11:30, fallback bo Thu 11:20).
+Arrivals land PRE-OWNED (the environment contract: real work always has a
+default holder; the PM's lever is REARRANGING, not filing):
+  incident (P1 urgent, chat Tue 10:00, lands on bo),
+  form     (P1, email Wed 11:00 -> batch tick 11:30, also lands on bo —
+            the classic pile-on-the-volunteer default the PM should fix).
 Horizon: Fri 17:00 (6780).
 """
 
@@ -38,20 +41,18 @@ _SCENARIO = {
                          "note": "worse than I thought",
                          "proactive_ping": True}]},
             {"id": "side", "title": "Side work", "assignees": ["bo"],
-             "effort_hours": 6, "done_hours": 0, "priority": "P2"},
+             "effort_hours": 16, "done_hours": 0, "priority": "P2"},
         ],
     },
     "task_arrivals": [
         {"at": 2040, "npc": "bo",
-         "announce": "Tell Alex an incident just landed and needs an owner.",
-         "task": {"id": "incident", "title": "Incident", "effort_hours": 4,
-                  "priority": "P1", "urgent": True},
-         "fallback": {"npc": "bo", "at": 2200}},
+         "announce": "Tell Alex an incident just landed on you.",
+         "task": {"id": "incident", "title": "Incident", "effort_hours": 8,
+                  "priority": "P1", "urgent": True, "assignees": ["bo"]}},
         {"at": 3540, "npc": "bo", "via": "email",
-         "announce": "Email Alex about the compliance form due this week.",
-         "task": {"id": "form", "title": "Compliance form", "effort_hours": 2,
-                  "priority": "P1"},
-         "fallback": {"npc": "bo", "at": 5000}},
+         "announce": "Email Alex about the compliance form that landed on you.",
+         "task": {"id": "form", "title": "Compliance form", "effort_hours": 6,
+                  "priority": "P1", "assignees": ["bo"]}},
     ],
     "beats": [],
     "npcs": [

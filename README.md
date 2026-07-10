@@ -32,10 +32,11 @@ Everything is replayable byte-for-byte from the event log.
   interrogation hack is dead: asking everyone on Monday yields honest
   *wrong* answers.
 - **Execution** — external asks arrive as chat pings (push, wakes the
-  agent mid-`advance_time`) or email (batched push); they are not on the
-  board until the PM files the ticket, and can't be assigned before that.
-  If the PM does nothing, the org's fallback volunteer eventually grabs the
-  work — usually the wrong person, late.
+  agent mid-`advance_time`) or email (batched push), each landing **already
+  owned by a default holder** — often the wrong one: the swamped volunteer,
+  the wrong specialist. The PM's levers are `assign_task` (move it) and
+  `reprioritize` (reorder it, scheduling-only — the authored priority keeps
+  its scoring weight). If the PM does nothing, the defaults just play out.
 - **Fairness, twice** — scenarios are *gated* for fairness (every scored
   ask must be completable after the PM could first know it), and the PM is
   *scored* on fairness (1 − σ of per-person hours-worked/hours-available).
@@ -95,16 +96,43 @@ validation, agents minting score with made-up tasks.
   no-spread / noisy) and reports each mechanism's **share of the band** — a
   mechanism with share ≈ 0 is not taught by that task.
 
-## The scenario ladder
+## Generating difficulty-tuned tasks
 
-| scenario | character | band width | teaches (measured shares) |
-|---|---|---|---|
-| `demo_1` | roomy floor | 0.35 | sanity / saturation check |
-| `demo` | timing task | 0.75 | preempt the fallback (0.999), channel discipline (0.15) |
-| `demo_2` | delivery task, forced triage | 5.14 | timing (0.70), allocation (0.37), channel discipline (0.29) |
+```sh
+.venv/bin/python -m sim.generate scenarios/demo.json --tier hard --n 5 --seed 7 --out scenarios/gen
+```
 
-Names are deliberately neutral — hardness is *determined* by measured score
-degradation, never asserted by a label.
+One template carries the fiction (personas, announce texts, herrings); the
+generator mints instances by remixing the *physics* — efforts, arrival
+times, ticket ids (anti-memorization), default owners (the `pileup` knob:
+does everything land on one volunteer?), belief errors, latency seeds.
+Every draw is keyed by (template, tier, seed) and materialized into the
+emitted file; every candidate passes the full gate (validation → fairness →
+tier band) and is stamped with its `[baseline, OPT]` anchors. Tiers target
+capacity utilization and winnable-band ranges; hardness is then *measured*
+(probe-ladder score degradation), never asserted by the label. Rejected
+samples cost attempts, never bad instances — an authoring bug cannot ship.
+
+## Grading, and how it resists reward hacking
+
+Score = the agent's normalized position in the per-task band
+`[no-PM baseline, OPT_ideal]` on the COMBINED metric (completion +
+γ·efficiency), with done-rate and workload fairness reported alongside.
+Every number is deterministic and re-computable forever from the run dir
+(`python -m sim.eval runs/<id>`); scorecards carry a `scored_with` hash of
+the scoring source so stale caches self-identify.
+
+| attack | defense |
+|---|---|
+| look busy (chats, meetings, check-ins) | activity earns nothing; interruptions cost the recipient 20 serialized focus-min and meetings block calendars — measured runs of chatty PMs score **below zero** |
+| mint value with made-up tasks | agent-created tasks carry zero rubric weight (but still consume real capacity if staffed) |
+| relabel a task's priority to score more | `reprioritize` changes scheduling order only; scoring weight stays authored |
+| claim credit for work that happens anyway | the baseline is a complete unmanaged org (default owners work every arrival); score 0 = "added nothing beyond it" |
+| out-labor the ceiling via stakeholders | the labor pool binds both sides: OPT excludes `worker:false` people and the engine refuses to assign them |
+| game the tracker | scoring reads scheduler truth, never reported status |
+| interrogate everyone for hidden truth | beliefs are honest-but-wrong; there is no oracle to extract, only completions to observe |
+| farm an impossible ask for sympathy points | the fairness gate rejects any task not completable after the PM could first know of it |
+| exploit judge wording | there is no judge: no LLM, no keywords, no checks anywhere in scoring |
 
 ## Invariants (the short version of DESIGN.md)
 

@@ -45,6 +45,20 @@ def _view_inbox(engine, args):
             for m in msgs[-int(args.get("limit", 20)):]]
 
 
+def _view_calendar(engine, args):
+    # calendars are EXPOSED truth (DESIGN.md information ledger): who is in
+    # what meeting when is public — capacity math stays the PM's job
+    now = engine.world.clock
+    out = []
+    for m in sorted(engine.world.meetings, key=lambda m: m["start"]):
+        out.append({"topic": m["topic"],
+                    "start": fmt(m["start"]), "end": fmt(m["end"]),
+                    "attendees": m["attendees"],
+                    "status": ("past" if m["end"] <= now else
+                               "now" if m["start"] <= now else "upcoming")})
+    return {"now": engine.world.now(), "meetings": out}
+
+
 def _advance(engine, minutes):
     # PM sleep semantics: push-class signals interrupt the advance (control
     # comes back at the interruption instant); board broadcasts never do.
@@ -151,6 +165,10 @@ TOOLS = [
     _tool("view_inbox",
           "Read recent messages you've received.",
           {"limit": {"type": "integer"}}, [], _view_inbox),
+
+    _tool("view_calendar",
+          "See the team calendar: every meeting with its time and attendees.",
+          {}, [], _view_calendar),
 
     _tool("advance_time",
           "Let simulated time pass (you do nothing for N minutes); scheduled "

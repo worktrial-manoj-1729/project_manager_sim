@@ -30,11 +30,9 @@ class TestBandAnchors(unittest.TestCase):
 
     def test_active_pm_lands_in_the_band(self):
         eng = make_engine()
-        goto(eng, 2050)
-        call_tool(eng, "add_task", {"title": "Incident", "id": "incident"})
-        call_tool(eng, "assign_task", {"task_id": "incident", "npc": "bo"})
-        goto(eng, 3580)  # form email delivered at 3570
-        call_tool(eng, "add_task", {"title": "Compliance form", "id": "form"})
+        goto(eng, 2050)  # incident landed on bo at 2040
+        goto(eng, 3580)  # form email delivered at 3570 — also on bo
+        # the PM's lever: REARRANGE the pile-on-the-volunteer default
         call_tool(eng, "assign_task", {"task_id": "form", "npc": "ana"})
         # a made-up task must never mint value (weight 0), only cost capacity
         call_tool(eng, "add_task", {"title": "Fake thing", "effort_hours": 3})
@@ -58,14 +56,16 @@ class TestGates(unittest.TestCase):
     def test_valid_fixture_passes(self):
         self.assertEqual(validate_scenario(scenario()), [])
 
-    def test_missing_fallback_rejected(self):
+    def test_unowned_arrival_rejected(self):
+        """The contract: real work always has an owner — arrivals must land
+        assigned to a default holder, or the baseline is a strawman."""
         s = scenario()
-        del s["task_arrivals"][0]["fallback"]
-        self.assertTrue(any("fallback" in e for e in validate_scenario(s)))
+        del s["task_arrivals"][0]["task"]["assignees"]
+        self.assertTrue(any("owner" in e for e in validate_scenario(s)))
 
-    def test_stakeholder_fallback_rejected(self):
+    def test_stakeholder_owner_rejected(self):
         s = scenario()
-        s["task_arrivals"][0]["fallback"]["npc"] = "vp"
+        s["task_arrivals"][0]["task"]["assignees"] = ["vp"]
         self.assertTrue(any("stakeholder" in e for e in validate_scenario(s)))
 
     def test_silent_arrival_rejected(self):

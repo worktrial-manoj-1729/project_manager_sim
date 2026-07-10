@@ -20,53 +20,44 @@ def advance_collect(eng, target):
     return notifs
 
 
-class TestArrivalAndFiling(unittest.TestCase):
-    def test_chat_announce_wakes_with_ticket_ref(self):
+class TestArrivals(unittest.TestCase):
+    def test_chat_announce_wakes_with_ticket_and_owner(self):
         eng = make_engine()
         notifs = advance_collect(eng, 2100)  # incident announced at 2040
         self.assertTrue(any(n.get("chat_from") == "bo"
-                            and "(ticket: incident)" in n.get("text", "")
+                            and "(ticket: incident, currently on bo)"
+                            in n.get("text", "")
                             for n in notifs))
         # the proactive belief confession (t=2000) is a push too
         self.assertTrue(any(n.get("chat_from") == "ana" for n in notifs))
         self.assertEqual(eng.world.find_task("core")["belief_pct"], 40)
 
-    def test_unfiled_hidden_and_unassignable_until_filed(self):
+    def test_arrival_lands_owned_and_on_the_board(self):
+        """The contract: real work always has an owner — an arrival is on the
+        board, assigned to its default holder, worked from the instant it
+        lands (assigned_at = arrival). The PM's lever is rearranging."""
         eng = make_engine()
         goto(eng, 2100)
-        board = {t["id"] for t in eng.world.tracker_view()}
-        self.assertNotIn("incident", board)
+        t = eng.world.find_task("incident")
+        self.assertEqual(t["assignees"], ["bo"])
+        self.assertTrue(t["filed"])
+        self.assertEqual(t["assigned_at"], 2040)
+        self.assertIn("incident", {r["id"] for r in eng.world.tracker_view()})
+
+    def test_reassignment_stamps_handoff_and_keeps_progress(self):
+        eng = make_engine()
+        goto(eng, 2100)
         r, _ = unwrap(call_tool(eng, "assign_task",
-                                {"task_id": "incident", "npc": "bo"}))
-        self.assertIn("error", r)
-        r, _ = unwrap(call_tool(eng, "add_task",
-                                {"title": "Incident", "id": "incident"}))
-        self.assertEqual(r.get("filed"), "incident")
-        r, _ = unwrap(call_tool(eng, "assign_task",
-                                {"task_id": "incident", "npc": "bo"}))
+                                {"task_id": "incident", "npc": "ana"}))
         self.assertEqual(r.get("assigned"), "incident")
         # tracker-shaped ack only — never the truth dict
         self.assertNotIn("belief", r)
         self.assertNotIn("effort_hours", r)
-
-    def test_preempting_skips_the_fallback(self):
-        eng = make_engine()
-        goto(eng, 2100)
-        call_tool(eng, "add_task", {"title": "Incident", "id": "incident"})
-        call_tool(eng, "assign_task", {"task_id": "incident", "npc": "ana"})
-        goto(eng, 2300)  # past fallback.at=2200
-        self.assertEqual(eng.world.find_task("incident")["assignees"], ["ana"])
-        org = [e for e in eng.world.log if e["kind"] == "task_updated"
-               and e.get("source") == "org"]
-        self.assertEqual(org, [])
-
-    def test_fallback_fires_when_unowned(self):
-        eng = make_engine()
-        goto(eng, 2300)
         t = eng.world.find_task("incident")
-        self.assertEqual(t["assignees"], ["bo"])
-        self.assertTrue(t["filed"])
-        self.assertEqual(t["assigned_at"], 2200)  # picked up AT the fallback
+        self.assertEqual(t["assignees"], ["ana"])
+        self.assertGreaterEqual(t["assigned_at"], 2100)  # handoff is NOW
+        # bo's ~hour of work before the handoff is persisted, not re-credited
+        self.assertGreater(t.get("done_hours", 0), 0)
 
 
 class TestChannels(unittest.TestCase):
@@ -74,15 +65,25 @@ class TestChannels(unittest.TestCase):
         eng = make_engine()
         notifs = advance_collect(eng, 3600)  # email arrival 3540 -> tick 3570
         mail = [n for n in notifs if "email_from" in n]
-        self.assertTrue(any("(ticket: form)" in n["text"] for n in mail))
+        self.assertTrue(any("(ticket: form" in n["text"] for n in mail))
         delivered = [e for e in eng.world.log if e["kind"] == "email_delivered"]
         self.assertEqual(delivered[0]["t"], 3570)
 
     def test_completions_deliver_but_never_wake(self):
-        eng = make_engine()  # bo's side task (6h) completes Mon ~15:05
-        r, notifs = unwrap(call_tool(eng, "advance_time", {"minutes": 655}))
-        self.assertNotIn("interrupted", r)  # a board broadcast is not a person
-        self.assertTrue(any("tracker" in n for n in notifs))
+        """Board broadcasts are delivered with tool results but only PEOPLE
+        (chat, delivered email, room lines) may interrupt an advance."""
+        eng = make_engine()
+        saw_completion = False
+        while eng.world.clock < 2600:   # ana's core completes ~Tue 12:45
+            r = call_tool(eng, "advance_time",
+                          {"minutes": 2600 - eng.world.clock})
+            res, notifs = unwrap(r)
+            saw_completion = saw_completion or any("tracker" in n for n in notifs)
+            if res.get("interrupted"):
+                self.assertTrue(any("chat_from" in n or "email_from" in n
+                                    or "in_meeting" in n for n in notifs),
+                                "woken with no person-signal in the batch")
+        self.assertTrue(saw_completion)
 
     def test_chat_wakes_mid_advance(self):
         eng = make_engine()
@@ -112,8 +113,8 @@ class TestLiveness(unittest.TestCase):
         r, _ = unwrap(call_tool(eng, "reprioritize",
                                 {"task_id": "side", "priority": "P9"}))
         self.assertIn("error", r)
-        r, _ = unwrap(call_tool(eng, "reprioritize", {"task_id": "incident"}))
-        self.assertIn("error", r)  # unfiled ticket isn't on the board
+        r, _ = unwrap(call_tool(eng, "reprioritize", {"task_id": "nope"}))
+        self.assertIn("error", r)  # unknown task
 
     def test_stakeholders_take_no_tickets(self):
         eng = make_engine()

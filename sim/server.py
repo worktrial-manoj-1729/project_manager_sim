@@ -45,6 +45,44 @@ PRICES = {
 }
 
 
+def load_transcript(run_dir):
+    """The agent conversation for a run, OpenAI chat format. Prefers the
+    untruncated transcript.jsonl the harness writes; for runs that predate
+    it, reconstructs assistant turns from llm.jsonl (tool OUTPUTS were not
+    recorded back then and are marked as such)."""
+    if not run_dir:
+        return []
+    tp = os.path.join(run_dir, "transcript.jsonl")
+    if os.path.exists(tp):
+        out = []
+        with open(tp) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    out.append(json.loads(line))
+        return out
+    lp = os.path.join(run_dir, "llm.jsonl")
+    out = []
+    if os.path.exists(lp):
+        with open(lp) as f:
+            for line in f:
+                if '"agent_turn"' not in line:
+                    continue
+                e = json.loads(line)
+                out.append({"role": "assistant", "sim_t": e.get("sim_t"),
+                            "sim_t_fmt": e.get("sim_t_fmt"),
+                            "content": e.get("response_text", ""),
+                            "tool_calls": [
+                                {"name": c["name"], "arguments": c["input"]}
+                                for c in e.get("tool_calls", [])]})
+                for c in e.get("tool_calls", []):
+                    out.append({"role": "tool", "name": c["name"],
+                                "sim_t": e.get("sim_t"),
+                                "content": "(output not recorded — run "
+                                           "predates transcript.jsonl)"})
+    return out
+
+
 class RunHub:
     """One dashboard, every run: lists runs/ with labels (agent model, live
     status, score, cost) and serves any of them read-only via ?run=<id>."""
@@ -289,6 +327,12 @@ class Handler(BaseHTTPRequestHandler):
               and "run" not in parse_qs(url.query)):
             # hub aggregate view; ?run=<id> falls through to the per-run board
             self._json({"tasks": HUB.list_tasks()})
+        elif url.path == "/api/transcript":
+            # the agent's whole conversation, OpenAI chat format, untruncated
+            src = self._src(url.query)
+            run_dir = (src.run_dir if src is not None
+                       else ENGINE.run_dir if ENGINE is not None else None)
+            self._json({"messages": load_transcript(run_dir)})
         elif url.path == "/api/meta":
             src = self._src(url.query)
             if src is not None:

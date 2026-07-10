@@ -194,9 +194,9 @@
   ],
   "band": {
     "no_pm_baseline": {
-      "combined": 31.315,
+      "combined": 32.066,
       "completion": 38.0,
-      "efficiency": 17.945,
+      "efficiency": 20.197,
       "done_weight_rate": 1.0
     },
     "opt_max": {
@@ -205,7 +205,7 @@
       "efficiency": 20.197,
       "done_weight_rate": 1.0
     },
-    "winnable_combined": 0.751,
+    "winnable_combined": 0.0,
     "log10_trajectory_classes": 12.2,
     "capacity_utilization": 0.64,
     "forced_triage": false,

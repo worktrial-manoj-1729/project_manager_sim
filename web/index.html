@@ -137,10 +137,38 @@
   .legend { display: flex; gap: 18px; align-items: center; font-size: 12px;
             color: var(--ink-2); margin-bottom: 10px; flex-wrap: wrap; }
   .legend svg { vertical-align: -3px; }
-  #pm-traj { max-height: 240px; overflow-y: auto; font-size: 13px; }
+  #pm-traj { max-height: 70vh; overflow-y: auto; font-size: 13px; }
   .pm-row { padding: 3px 8px; border-left: 3px solid var(--c-agent); margin: 2px 0; }
   .pm-row .t { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 6px; }
   .pm-row.inbound { border-left-color: var(--baseline); color: var(--ink-2); }
+
+  /* ---- agent conversation (real transcript, chat format) ---- */
+  .conv-msg { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+              margin: 8px 0; background: var(--surface-1); font-size: 13px; }
+  .conv-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .conv-role { font-size: 11px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: .05em; }
+  .conv-t { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+            border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; }
+  .conv-body { white-space: pre-wrap; word-break: break-word; }
+  .conv-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+               font-size: 12px; white-space: pre-wrap; word-break: break-word;
+               margin: 4px 0 0; background: var(--page); border: 1px solid var(--grid);
+               border-radius: 6px; padding: 6px 8px; }
+  .conv-user      { border-left: 3px solid var(--c-n2); }
+  .conv-user .conv-role { color: #8a5d00; }
+  @media (prefers-color-scheme: dark) { .conv-user .conv-role { color: var(--c-n2); } }
+  .conv-assistant { border-left: 3px solid var(--c-agent); }
+  .conv-assistant .conv-role { color: var(--c-agent); }
+  .conv-system    { border-left: 3px solid var(--ink-3); }
+  .conv-toolout   { border-left: 3px solid var(--baseline); background: var(--page); }
+  .conv-toolout .conv-role, .conv-system .conv-role { color: var(--ink-3); }
+  .conv-msg details summary { cursor: pointer; font-size: 12px; color: var(--ink-3); }
+  .conv-msg details[open] summary { margin-bottom: 4px; }
+  .conv-tool-call { margin-top: 6px; }
+  .conv-fn { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+             font-size: 12px; font-weight: 600; color: var(--c-n4); }
+  @media (prefers-color-scheme: dark) { .conv-fn { color: #9085e9; } }
 
   /* ---- Benchmark tab (overview charts + compact task table) ---- */
   #bench-wrap { position: relative; }
@@ -238,7 +266,7 @@
 
   <section id="tab-trajectory" class="tab">
     <div class="panel" style="margin-bottom:14px">
-      <h3>PM trajectory — every agent action, in order (dim rows = pushes the PM received)</h3>
+      <h3 id="pm-traj-head">Agent conversation</h3>
       <div id="pm-traj"></div>
     </div>
     <div class="panel">
@@ -774,6 +802,7 @@ async function poll() {
   scrub.max = Math.max(0, EVENTS.length - 1);
   if (cursor === null) scrub.value = scrub.max;
   if (grew || cursor === null) { render(); updateTasks(); }
+  refreshTranscript();   // cached per run; refetches only while the run is live
 }
 
 async function updateTasks() {
@@ -923,12 +952,105 @@ function renderTimeline() {
   $("timeline-body").innerHTML = rows.reverse().join("");
 }
 
-/* ---------- trajectory (PM action list + SVG swimlanes) ---------- */
+/* ---------- trajectory (agent conversation + SVG swimlanes) ---------- */
+// The REAL agent conversation (OpenAI chat format) from /api/transcript,
+// cached per run. Refetched on poll only while the run is live (plus one
+// final fetch when it goes live -> finished). Empty transcript (scripted
+// runs, missing file) -> fall back to the event-derived PM action list.
+const TRANSCRIPTS = {};        // run key -> {messages, wasLive}
+let transcriptFetching = false;
+
+function transcriptKey() { return (HUBMODE && currentRun) || "__local__"; }
+function runIsLive() {
+  if (!HUBMODE) return true;   // single-run server: no liveness info, keep polling
+  const r = RUNS.find(r2 => r2.id === currentRun);
+  return !!(r && r.live);
+}
+
+async function refreshTranscript() {
+  const key = transcriptKey();
+  const have = TRANSCRIPTS[key];
+  // cached + run finished (and already fetched once after it finished) -> done
+  if (have && !runIsLive() && !have.wasLive) return;
+  if (transcriptFetching) return;
+  transcriptFetching = true;
+  try {
+    const r = await fetch(api("/api/transcript"));
+    if (r.ok) {
+      const j = await r.json();
+      const msgs = Array.isArray(j.messages) ? j.messages : [];
+      const prev = TRANSCRIPTS[key];
+      TRANSCRIPTS[key] = {messages: msgs, wasLive: runIsLive()};
+      if (!prev || prev.messages.length !== msgs.length) renderPmTraj();
+    } else {
+      TRANSCRIPTS[key] = {messages: [], wasLive: false};
+      renderPmTraj();
+    }
+  } catch (e) {}
+  transcriptFetching = false;
+}
+
+function pretty(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  try { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }
+}
+
+function convCard(m) {
+  const t = m.sim_t_fmt ? `<span class="conv-t">${esc(m.sim_t_fmt)}</span>` : "";
+  if (m.role === "system")
+    return `<div class="conv-msg conv-system"><details>
+      <summary><span class="conv-role">system prompt</span> ${t}</summary>
+      <div class="conv-body">${esc(m.content || "")}</div></details></div>`;
+  if (m.role === "user")
+    return `<div class="conv-msg conv-user">
+      <div class="conv-head"><span class="conv-role">user</span>${t}</div>
+      <div class="conv-body">${esc(m.content || "")}</div></div>`;
+  if (m.role === "assistant") {
+    let inner = "";
+    if (m.thinking)
+      inner += `<details><summary>thinking</summary>
+        <div class="conv-body" style="color:var(--ink-2)">${esc(m.thinking)}</div></details>`;
+    if (m.content) inner += `<div class="conv-body">${esc(m.content)}</div>`;
+    for (const tc of (m.tool_calls || []))
+      inner += `<div class="conv-tool-call"><span class="conv-fn">${esc(tc.name)}(</span>
+        <div class="conv-mono">${esc(pretty(tc.arguments))}</div><span class="conv-fn">)</span></div>`;
+    return `<div class="conv-msg conv-assistant">
+      <div class="conv-head"><span class="conv-role">assistant</span>${t}</div>
+      ${inner || '<div class="conv-body" style="color:var(--ink-3)">(empty)</div>'}</div>`;
+  }
+  if (m.role === "tool")
+    return `<div class="conv-msg conv-toolout">
+      <div class="conv-head"><span class="conv-role">tool output${m.name ? " — " + esc(m.name) : ""}</span>${t}</div>
+      <div class="conv-mono">${esc(pretty(m.content))}</div></div>`;
+  return `<div class="conv-msg">
+    <div class="conv-head"><span class="conv-role">${esc(m.role || "?")}</span>${t}</div>
+    <div class="conv-body">${esc(pretty(m.content))}</div></div>`;
+}
+
+function renderConversation(el, msgs) {
+  $("pm-traj-head").textContent =
+    `Agent conversation — ${msgs.length} messages (system / user / assistant / tool)`;
+  // only touch the DOM when the transcript actually changed — a re-render
+  // would collapse open <details> and yank the reader's scroll position
+  const key = transcriptKey() + ":" + msgs.length;
+  if (el.dataset.tkey === key) return;
+  el.dataset.tkey = key;
+  el.innerHTML = msgs.map(convCard).join("");
+}
+
 // chronological list of everything the PM DID (and every push it received),
-// derived from the same already-fetched event log the swimlanes draw from.
+// derived from the already-fetched event log — FALLBACK for runs with no
+// agent transcript (scripted probes, pre-transcript runs return []).
 function renderPmTraj() {
   const el = $("pm-traj");
   if (!el) return;
+  const rec = TRANSCRIPTS[transcriptKey()];
+  if (rec && rec.messages.length) { renderConversation(el, rec.messages); return; }
+  el.dataset.tkey = "";
+  $("pm-traj-head").textContent =
+    "PM trajectory — every agent action, in order (dim rows = pushes the PM received)" +
+    (rec ? " (no agent transcript for this run — event-derived view)" : "");
   const short = id => (actorName[id] || id || "?").split(" ")[0];
   const clip = s => esc(String(s).length > 110 ? String(s).slice(0, 110) + "…" : s);
   const rows = [];

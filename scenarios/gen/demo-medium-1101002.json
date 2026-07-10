@@ -1,5 +1,5 @@
 {
-  "seed": 42,
+  "seed": 1101002,
   "company": "Brightpath, a 40-person B2B SaaS startup",
   "agent_name": "Alex",
   "start_time": 545,
@@ -15,8 +15,8 @@
         "assignees": [
           "dave"
         ],
-        "effort_hours": 6,
-        "done_hours": 6,
+        "effort_hours": 7.5,
+        "done_hours": 7.5,
         "reported": "Done (landed 2 days late)",
         "priority": "P0"
       },
@@ -26,17 +26,23 @@
         "assignees": [
           "sarah"
         ],
-        "effort_hours": 40,
-        "done_hours": 30,
+        "effort_hours": 47.5,
+        "done_hours": 26.0,
         "blocked_by": [
           "auth-dep"
         ],
-        "reported": "~75% done, on track",
+        "reported": "~70% done, on track for Friday",
         "priority": "P0",
         "belief": [
           {
-            "pct": 75,
-            "note": "on track — should land Wednesday"
+            "pct": 68,
+            "note": "on track for Friday"
+          },
+          {
+            "at": 2441,
+            "pct": 55,
+            "note": "schema rework surfaced — actually ~55%, roughly 18 focused hours left",
+            "proactive_ping": true
           }
         ]
       },
@@ -46,8 +52,8 @@
         "assignees": [
           "sarah"
         ],
-        "effort_hours": 12,
-        "done_hours": 0,
+        "effort_hours": 12.0,
+        "done_hours": 0.5,
         "blocked_by": [
           "migration"
         ],
@@ -60,8 +66,8 @@
         "assignees": [
           "dave"
         ],
-        "effort_hours": 20,
-        "done_hours": 16,
+        "effort_hours": 22.5,
+        "done_hours": 11.0,
         "reported": "About half done",
         "priority": "P2"
       }
@@ -69,17 +75,49 @@
   },
   "task_arrivals": [
     {
-      "at": 3780,
-      "npc": "priya",
-      "announce": "Meridian's legal team sent a security questionnaire that must be done before Friday's launch. Tell Alex it exists, that legal estimates about four focused hours, and ask who should own it — right now nobody does.",
+      "at": 2120,
+      "npc": "dave",
+      "announce": "A support escalation just landed: Meridian users are hitting SSO login failures — a P1, externally caused, on your service. Tell Alex about it and offer to take it, but be honest about the tradeoff: if you grab it, rate-limiting slips and you definitely can't help Sarah with the migration. Explicitly say it's Alex's call who owns it.",
       "task": {
-        "id": "security-questionnaire",
+        "id": "sso-f7c9",
+        "title": "P1: Meridian SSO login failures (support escalation) — NEEDS OWNER",
+        "effort_hours": 10.0,
+        "urgent": true,
+        "reported": "New — external escalation via support; unowned until PM assigns",
+        "priority": "P1",
+        "assignees": [
+          "sarah"
+        ]
+      }
+    },
+    {
+      "at": 3814,
+      "npc": "priya",
+      "announce": "Meridian's legal team just sent over a security questionnaire that must be completed before Friday's launch — externally imposed, non-negotiable. Tell Alex it exists, that it looks like a quick formality (an hour or so, you reckon), and pointedly ask who is going to own it, because right now nobody does.",
+      "task": {
+        "id": "security-df18",
         "title": "Meridian security questionnaire (legal, pre-launch)",
-        "effort_hours": 4,
+        "effort_hours": 5.0,
         "reported": "New — from Meridian legal; UNOWNED",
         "priority": "P1",
         "assignees": [
-          "dave"
+          "sarah"
+        ]
+      }
+    },
+    {
+      "at": 4865,
+      "npc": "priya",
+      "via": "email",
+      "announce": "Write Alex an email forwarding the exec team's request: they want written launch-readiness confirmation from engineering before the Friday cutover — deployment checklist, rollback plan, monitoring. Someone needs to own collecting and compiling it today. You'd suggest not derailing whoever is heads-down on the critical path.",
+      "task": {
+        "id": "readiness-b370",
+        "title": "Meridian launch-readiness confirmations (compile from engineering)",
+        "effort_hours": 3.0,
+        "reported": "New — exec request; UNOWNED; needs input from both engineers",
+        "priority": "P1",
+        "assignees": [
+          "sarah"
         ]
       }
     }
@@ -89,6 +127,14 @@
       "at": 2040,
       "npc": "priya",
       "intent": "The Friday Meridian commitment is on your mind and you want a concrete, current status picture from Alex today. React naturally to however your conversation stands — don't assume anything your chat history contradicts."
+    },
+    {
+      "at": 4890,
+      "npc": "priya",
+      "condition": {
+        "task_not_done": "data-backfill"
+      },
+      "intent": "It's Thursday morning, the Meridian deadline is tomorrow 17:00, and the data backfill still is not done. You need a firm answer about Friday today, before you brief the exec team. React naturally given whatever Alex has or hasn't told you so far — pointed if you've been kept in the dark, focused on the decision if you've been kept informed."
     }
   ],
   "npcs": [
@@ -120,6 +166,7 @@
       "id": "priya",
       "name": "Priya Raman",
       "role": "VP Product (stakeholder)",
+      "worker": false,
       "persona": "Deadline-focused and terse, but professional. Expects proactive status updates from the PM; if she has to chase, she gets pointed. Escalates crisply when she senses slippage — mentions briefing the exec team, asks for firm dates, dislikes vague reassurance.",
       "knowledge": [
         "The checkout migration INCLUDING the data backfill was promised to Meridian, the company's biggest customer, by Friday 17:00.",
@@ -127,30 +174,48 @@
         "Meridian's CTO emails your CEO directly when things slip. A miss here is very visible.",
         "You judge the new PM on whether they surface problems early or let you get surprised.",
         "You believe the security questionnaire from Meridian legal is a quick ~1 hour formality."
-      ],
-      "worker": false
+      ]
     }
   ],
   "rubric": "rubrics/demo.json",
-  "herrings": [],
+  "herrings": [
+    {
+      "id": "rate-limiting-criticality",
+      "held_by": "dave",
+      "claim": "rate-limiting is Meridian-critical",
+      "truth": "it is P2 and off the critical path — chasing it wastes capacity"
+    },
+    {
+      "id": "questionnaire-size",
+      "held_by": "priya",
+      "claim": "the questionnaire is ~1 hour",
+      "truth": "it is 4 hours — trusting her under-allocates"
+    }
+  ],
+  "generated": {
+    "template": "checkout-migration",
+    "tier": "medium",
+    "seed": 1101002,
+    "generator_version": 1
+  },
   "band": {
     "no_pm_baseline": {
-      "combined": 27.018,
-      "completion": 30.0,
-      "efficiency": 21.054,
-      "done_weight_rate": 1.0
+      "combined": 22.391,
+      "completion": 26.844,
+      "efficiency": 13.484,
+      "done_weight_rate": 0.579
     },
     "opt_max": {
-      "combined": 27.018,
-      "completion": 30.0,
-      "efficiency": 21.054,
+      "combined": 31.649,
+      "completion": 38.0,
+      "efficiency": 18.948,
       "done_weight_rate": 1.0
     },
-    "winnable_combined": 0.0,
-    "log10_trajectory_classes": 4.7,
-    "capacity_utilization": 0.36,
+    "winnable_combined": 9.258,
+    "log10_trajectory_classes": 12.2,
+    "capacity_utilization": 0.75,
     "forced_triage": false,
-    "min_reaction_ratio": 4.75,
+    "min_reaction_ratio": 2.41,
     "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
   }
 }

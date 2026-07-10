@@ -20,16 +20,18 @@ Reading the report:
     learning signal, saturates after a single insight
   - several comparable shares = dense signal across skill levels
 
-Policies (all friction-respecting; acting only on knowable information):
-  oracle       seed moves Monday; file+assign each arrival to its OPT owner
-               at the earliest instant it is knowable (chat announce / email
-               batch tick)
-  late         same allocations, but only AFTER the org fallback has fired —
-               isolates the TIMING mechanism (preempt the volunteer)
-  no-spread    same timing, but every arrival goes to its fallback volunteer —
-               isolates the ALLOCATION mechanism (owner choice)
-  noisy        oracle + 3 chat pings to each assignee per decision —
-               isolates CHANNEL DISCIPLINE (the serialized focus tax)
+Policies (all friction-respecting; acting only on knowable information).
+Under the owned-arrivals contract every arrival already has a default
+holder; the PM's lever is REARRANGING, so the ablations are about when and
+whether to rearrange:
+  oracle   seed moves Monday; REASSIGN each arrival to its OPT owner at the
+           earliest instant it is knowable (chat announce / email batch tick)
+  late     the same reassignments, one day later — isolates TIMING
+  noisy    oracle + 3 chat pings to each touched assignee per decision —
+           isolates CHANNEL DISCIPLINE (the serialized focus tax)
+Shares: timing = oracle − late; channel = oracle − noisy; allocation =
+late's own score (the value owner-correction retains even when slow —
+do-nothing is 0 by construction, so late's residual is pure allocation).
 """
 
 import json
@@ -81,44 +83,54 @@ def _run_policy(scenario, name, opt, timing, owner, noisy=False):
             if noisy:
                 ping(want)
 
+    horizon_guess = load_horizon(scenario)
     plan = []
     for arr in scenario.get("task_arrivals", []):
-        when = (_knowable_at(arr, scenario) if timing == "early"
-                else arr["fallback"]["at"] + 5)
-        who = (opt["assignment"].get(arr["task"]["id"], arr["fallback"]["npc"])
-               if owner == "opt" else arr["fallback"]["npc"])
-        plan.append((when, arr["task"]["id"], arr["task"]["title"], who))
-    for when, tid, title, who in sorted(plan):
+        when = _knowable_at(arr, scenario)
+        if timing == "late":
+            when = min(when + 1440, horizon_guess - 120)  # a day of dithering
+        who = opt["assignment"].get(arr["task"]["id"])
+        default = (arr["task"].get("assignees") or [None])[0]
+        if who and who != default:   # same-owner reassign is pure loss
+            plan.append((when, arr["task"]["id"], who))
+    for when, tid, who in sorted(plan):
         goto(when)
-        call_tool(eng, "add_task", {"title": title, "id": tid})
         call_tool(eng, "assign_task", {"task_id": tid, "npc": who})
         if noisy:
             ping(who)
 
-    horizon = None
+    goto(load_horizon(scenario))
+    return evaluate(run_dir)
+
+
+def load_horizon(scenario):
     try:
         from .rubric import load_rubric
-        horizon = load_rubric(scenario)["horizon"]
+        return load_rubric(scenario)["horizon"]
     except SystemExit:
-        horizon = w.clock + 7 * 1440
-    goto(horizon)
-    return evaluate(run_dir)
+        return scenario.get("start_time", 545) + 7 * 1440
 
 
 def audit(scenario):
     opt = opt_ideal(scenario)
     runs = {
-        "oracle":    _run_policy(scenario, "oracle", opt, "early", "opt"),
-        "late":      _run_policy(scenario, "late", opt, "late", "opt"),
-        "no-spread": _run_policy(scenario, "no-spread", opt, "early", "fallback"),
-        "noisy":     _run_policy(scenario, "noisy", opt, "early", "opt",
-                                 noisy=True),
+        "oracle": _run_policy(scenario, "oracle", opt, "early", "opt"),
     }
+    if runs["oracle"]["score"] is None:
+        return {"degenerate": True, "scores": {}, "mechanism_shares": {},
+                "note": "band is empty — OPT == baseline; nothing for any "
+                        "policy to win. Re-author or regenerate (sim.generate "
+                        "gates this out automatically)."}
+    runs.update({
+        "late":   _run_policy(scenario, "late", opt, "late", "opt"),
+        "noisy":  _run_policy(scenario, "noisy", opt, "early", "opt",
+                              noisy=True),
+    })
     top = runs["oracle"]["score"]
     mechanisms = {
-        "timing (preempt the fallback)":  top - runs["late"]["score"],
-        "allocation (owner choice)":      top - runs["no-spread"]["score"],
-        "channel discipline (focus tax)": top - runs["noisy"]["score"],
+        "timing (rearrange early, not late)": top - runs["late"]["score"],
+        "allocation (owner choice)":          runs["late"]["score"],
+        "channel discipline (focus tax)":     top - runs["noisy"]["score"],
     }
     return {"scores": {k: v["score"] for k, v in runs.items()},
             "odds": {k: v.get("score_odds") for k, v in runs.items()},
@@ -135,6 +147,9 @@ def main():
         scenario = json.load(f)
     r = audit(scenario)
     print("intent audit: %s" % path)
+    if r.get("degenerate"):
+        print("  DEGENERATE: %s" % r["note"])
+        return
     print("  policy scores:  %s" % "  ".join(
         "%s=%.3f" % (k, v) for k, v in r["scores"].items()))
     print("  relaxation gap: %.1f%% of the band is unreachable by any policy"

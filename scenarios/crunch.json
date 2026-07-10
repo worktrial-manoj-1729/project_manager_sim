@@ -224,22 +224,22 @@
   ],
   "band": {
     "no_pm_baseline": {
-      "combined": 22.759,
-      "completion": 27.289,
-      "efficiency": 13.698,
+      "combined": 22.269,
+      "completion": 26.667,
+      "efficiency": 13.473,
       "done_weight_rate": 0.579
     },
     "opt_max": {
-      "combined": 28.849,
-      "completion": 35.289,
-      "efficiency": 15.97,
+      "combined": 28.364,
+      "completion": 34.667,
+      "efficiency": 15.757,
       "done_weight_rate": 0.789
     },
-    "winnable_combined": 6.09,
+    "winnable_combined": 6.095,
     "log10_trajectory_classes": 12.2,
-    "capacity_utilization": 0.79,
+    "capacity_utilization": 0.95,
     "forced_triage": true,
-    "min_reaction_ratio": 1.72,
+    "min_reaction_ratio": 1.07,
     "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
   }
 }

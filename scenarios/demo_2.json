@@ -84,11 +84,10 @@
         "effort_hours": 16,
         "urgent": true,
         "reported": "New — external escalation via support; unowned until PM assigns",
-        "priority": "P1"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 2400
+        "priority": "P1",
+        "assignees": [
+          "dave"
+        ]
       }
     },
     {
@@ -100,11 +99,10 @@
         "title": "Meridian security questionnaire (legal, pre-launch)",
         "effort_hours": 8,
         "reported": "New — from Meridian legal; UNOWNED",
-        "priority": "P1"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 6330
+        "priority": "P1",
+        "assignees": [
+          "dave"
+        ]
       }
     },
     {
@@ -117,11 +115,10 @@
         "title": "Meridian launch-readiness confirmations (compile from engineering)",
         "effort_hours": 3,
         "reported": "New — exec request; UNOWNED; needs input from both engineers",
-        "priority": "P1"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 6420
+        "priority": "P1",
+        "assignees": [
+          "dave"
+        ]
       }
     },
     {
@@ -134,11 +131,10 @@
         "title": "API perf regression since Monday deploy",
         "effort_hours": 16,
         "reported": "New — internal report; UNOWNED",
-        "priority": "P2"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 3900
+        "priority": "P2",
+        "assignees": [
+          "dave"
+        ]
       }
     }
   ],
@@ -222,18 +218,18 @@
   ],
   "band": {
     "no_pm_baseline": {
-      "combined": 25.517,
-      "completion": 30.825,
-      "efficiency": 14.901,
-      "done_weight_rate": 0.75
+      "combined": 29.549,
+      "completion": 37.26,
+      "efficiency": 14.127,
+      "done_weight_rate": 0.9
     },
     "opt_max": {
-      "combined": 30.66,
+      "combined": 30.373,
       "completion": 38.408,
-      "efficiency": 16.217,
+      "efficiency": 15.249,
       "done_weight_rate": 0.95
     },
-    "winnable_combined": 5.143,
+    "winnable_combined": 0.824,
     "log10_trajectory_classes": 16.1,
     "capacity_utilization": 1.11,
     "forced_triage": true,
