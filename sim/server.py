@@ -161,24 +161,16 @@ class RunHub:
                             task = (json.load(f).get("project") or {}).get("id", "")
                     except (OSError, ValueError):
                         task = ""
-                # RE-SCORE from the immutable events.jsonl with CURRENT code —
-                # never trust the cached scorecard.json (written by whatever code
-                # ran the rollout; a re-stamp or scoring change makes it stale,
-                # the exact false-signal trap sim.bench also guards against).
-                # Gate on scorecard.json EXISTING = the run FINISHED (don't score
-                # a partial in-progress run — that keeps it flagged `live`); the
-                # mtime cache means this fresh re-score happens once per run.
-                # finished = events exist and have gone quiet (>=90s) — or a
-                # scorecard exists. Gating on scorecard alone left runs whose
-                # final scoring step crashed unscorable FOREVER.
-                finished = os.path.exists(ep) and (
-                    os.path.exists(sp)
-                    or _t.time() - os.path.getmtime(ep) >= 90)
-                if finished:
+                # Read the run's CACHED scorecard.json (fast — the dashboard is a
+                # live view polled continuously; it must NOT run a baseline engine
+                # per run per request). The scorecard is written by the harness at
+                # run-end with the code of that run; `sim.bench` is the authoritative
+                # re-scorer that recomputes from events with current code. We flag
+                # staleness cheaply via `scored_with` rather than re-scoring here.
+                if os.path.exists(sp):
                     try:
-                        from .eval import evaluate
-                        with LOCK:   # server threads must not duplicate scoring
-                            sc = evaluate(d)
+                        with open(sp) as f:
+                            sc = json.load(f)
                         score = sc.get("score")
                         if isinstance(sc.get("completion"), dict):
                             completion = sc["completion"].get("normalized")
@@ -189,13 +181,8 @@ class RunHub:
                             fairness = sc["workload_fairness"].get("agent")
                         if isinstance(sc.get("combined"), dict):
                             band = sc["combined"].get("available")
-                    except Exception as ex:
-                        # visible, and CACHED (mtime keys invalidate if the
-                        # run's files ever change) — an uncached failure made
-                        # every poll re-score every legacy run: a thundering
-                        # herd that starved the whole dashboard
-                        print("hub: could not score %s: %r" % (rid, ex))
-                        score = None
+                    except (OSError, ValueError):
+                        pass
                 n = 0
                 if os.path.exists(ep):
                     with open(ep) as f:
