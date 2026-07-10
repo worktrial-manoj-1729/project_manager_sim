@@ -20,20 +20,28 @@ import json
 import os
 import sys
 
+from .eval import evaluate
+
 METRICS = ["completion", "efficiency", "done_weight_rate", "combined"]
 
 
 def _load(runs_root):
+    """ALWAYS recompute each run's score from its immutable events.jsonl with
+    the CURRENT code — never read the cached scorecard.json. A cached
+    scorecard written by older code is the exact trap that caused a false
+    'Opus never clears baseline' scare; the event log is the source of truth,
+    the scorecard is only a cache. eval is free (no API), so re-scoring is
+    cheap and always correct."""
     by_model = {}
     for meta_path in glob.glob(os.path.join(runs_root, "*", "meta.json")):
         d = os.path.dirname(meta_path)
-        sc_path = os.path.join(d, "scorecard.json")
-        if not os.path.exists(sc_path):
+        if not os.path.exists(os.path.join(d, "events.jsonl")):
             continue
         try:
             meta = json.load(open(meta_path))
-            sc = json.load(open(sc_path))
-        except (ValueError, OSError):
+            sc = evaluate(d)   # fresh, current-code score from events
+        except Exception as e:
+            print("  (skipped %s: %s)" % (os.path.basename(d), e))
             continue
         model = meta.get("agent_model", "?")
         row = {m: (sc.get(m) or {}).get("normalized") for m in METRICS}

@@ -24,13 +24,34 @@ meetings consume capacity, completions land later, efficiency drops.
 Every number is deterministic and reproducible from the run dir forever.
 """
 
+import glob
+import hashlib
 import json
+import os
 import sys
 
 from .optimal import opt_ideal, worker_ids
 from .replay import load_run, replay
 from .rubric import load_rubric, task_value
 from .sim_time import fmt
+
+
+def scoring_version():
+    """A short hash of the SCORING-relevant source (the schedule + the metrics
+    + OPT/baseline). Stamped into every scorecard so a cached score is
+    self-identifying: if this differs from the current code's, the scorecard
+    was written by different physics and must NOT be trusted — re-score from
+    the immutable events.jsonl instead. (This is the guard against the stale-
+    scorecard scare; the aggregator `sim.bench` always re-scores regardless.)"""
+    h = hashlib.sha256()
+    here = os.path.dirname(__file__)
+    for name in ("tasks.py", "rubric.py", "optimal.py", "eval.py"):
+        try:
+            with open(os.path.join(here, name), "rb") as f:
+                h.update(f.read())
+        except OSError:
+            pass
+    return h.hexdigest()[:12]
 
 
 class _StubUsage:
@@ -115,6 +136,7 @@ def evaluate(run_dir):
 
     return {
         "run_dir": run_dir,
+        "scored_with": scoring_version(),   # stale-cache guard (see above)
         "horizon": horizon,
         "horizon_fmt": fmt(horizon),
         "degenerate": score is None,
