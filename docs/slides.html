@@ -79,6 +79,32 @@ result    same seed + same actions = the same week, byte for byte  <span class="
      <span class="pill">4 · rubrics</span></p>
 </section>
 
+<!-- 1b · the task is a config file -->
+<section class="slide">
+  <div class="kicker">the task file</div>
+  <h2>A whole task is one config file — every knob is a number</h2>
+  <div class="ex" style="font-size:1.9vh; line-height:1.5">{
+  <span class="c">"company"</span>: "Meridian — 6-engineer launch team",   <span class="c">"start_time": Mon 09:00,</span>
+  <span class="c">"costs"</span>:   { chat_interrupt_minutes: <b class="red">10</b> },        <span class="c">← the focus tax</span>
+  <span class="c">"physics"</span>: { parallel_cap: <b>1.5</b>, swarm_cap: <b>2.5</b> },    <span class="c">← pooling (Brooks), tunable</span>
+  <span class="c">"answer_batch_minutes"</span>: <b>120</b>,                     <span class="c">← how long an email answer waits</span>
+
+  <span class="c">"tasks"</span>: [{ id: <b>api-core</b>, priority: <b class="red">P0</b>, effort_h: 60, done_h: 18,
+       assignees: [<b>sam</b>], tags: [backend], blocked_by: [design-specs],
+       <span class="green">belief</span>:    [{ remaining_frac: .15, held_by: sam },        <span class="c">Mon: "nearly done"</span>
+                   { at: <b>Tue 13:00</b>, remaining_frac: .70, ping }],  <span class="c">the slip</span>
+       <span class="violet">questions</span>: [{ at: <b>Tue 09:00</b>, gates: true, held_by: sam,
+                    ping: "OAuth or email+pw? — blocked till you call it" }] }],
+
+  <span class="c">"arrivals"</span>: [{ at: Tue, task: { security-audit, P1, assignees:[<b>maya</b>] }}],  <span class="c">← wrong (busy) owner</span>
+  <span class="c">"npcs"</span>:    [{ id: sam, <span class="accent">skills</span>: { backend: <b>1.9</b> } }],           <span class="c">← HIDDEN speed; never shown</span>
+  <span class="c">"band"</span>:    [ no-PM baseline , OPT ]                       <span class="c">← stamped by the gate, pre-run</span>
+}</div>
+  <p class="cap">Nothing is code. Difficulty, hidden skills, the belief slip, the blocking decision,
+  the wrong default owner — each is a <b>number a generator can remix</b>, and the same
+  <b>seed</b> replays the week byte-for-byte. The scoring band is computed from this file <b>before any agent runs</b>.</p>
+</section>
+
 <!-- 2 · world: the machine -->
 <section class="slide">
   <div class="kicker">1 · the world</div>
@@ -371,14 +397,19 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
       hundreds of tasks on one scale.</p>
     </div>
     <div>
-      <table>
-        <tr><th>generated tier</th><th>haiku</th><th>sonnet</th></tr>
-        <tr><td>easy</td><td class="num red">−0.13</td><td class="num green">0.91</td></tr>
-        <tr><td>medium</td><td class="num amber">+0.41</td><td class="num green">0.97</td></tr>
-        <tr><td>hard <span class="sub">(forced triage)</span></td><td class="num red">−0.26</td><td class="num amber">0.49</td></tr>
+      <table style="font-size:1.9vh">
+        <tr><th>what the reward actually TEACHES</th><th>crunch</th><th>bigweek</th></tr>
+        <tr><td>answer the blocking decision</td><td class="num">.93</td><td class="num">.95</td></tr>
+        <tr><td>route to specialists + reallocate</td><td class="num">.16</td><td class="num">.50</td></tr>
+        <tr><td>act early (timing)</td><td class="num">.78</td><td class="num">.49</td></tr>
+        <tr><td>channel discipline (focus tax)</td><td class="num sub">.03</td><td class="num sub">.01</td></tr>
       </table>
-      <p class="cap">No keywords, no judge, no credit for activity. Ordering holds in all six
-      cells; hard costs even a strong model half its gap.</p>
+      <p class="cap">Not asserted — <b style="color:var(--ink)">measured</b>: an ablation audit plays
+      policies differing in one decision; the score it loses = that decision's share of the band.
+      <b>bigweek</b> spreads the signal across three levers; a one-bit task would pile it on one row.</p>
+      <p class="cap">Separates models (no keywords/judge): sonnet Max@3 <b class="green">+0.79</b>,
+      opus peak <b class="green">0.96</b>. The 21-task <b>bigweek</b> lands opus at
+      <b class="amber">0.58</b> — mid-band, headroom to learn — over <b>158 turns</b>.</p>
     </div>
   </div>
 </section>
@@ -403,15 +434,16 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
 $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model claude-sonnet-5
 <span class="c">  SCORE: 0.491    (0 = the unmanaged week, 1 = the best solo week)</span></div>
   <ul style="margin-top:3vh">
-    <li>Difficulty is <b>measured, never asserted</b> — fingerprints predict it, model runs confirm it.</li>
-    <li>Deterministic end to end — <b>built for training</b>, not just evaluation.</li>
+    <li>Difficulty is <b>measured, never asserted</b> — an ablation audit shows which decision owns which slice of the band.</li>
+    <li>Scales cleanly: from a 3-person crunch to a <b>21-task, 8-person week</b> (bigweek) — winnable band ~26, trajectory-classes 10^27.</li>
+    <li>Deterministic end to end — <b>built for training</b>. Prompt-cached rollouts (~78% cheaper) keep long weeks affordable.</li>
     <li>Every benchmark point is <b>three clicks from its evidence</b>: task → run → full conversation.</li>
   </ul>
 </section>
 
 <footer>
   <span>project_manager_sim</span>
-  <span id="pos">1 / 13</span>
+  <span id="pos">1 / 14</span>
   <span>← → to navigate</span>
 </footer>
 
