@@ -208,6 +208,13 @@ class RunHub:
         for rec in self.list_runs():  # already newest-first
             groups.setdefault(rec["task"] or "unknown", []).append(rec)
 
+        def std(recs, field):
+            vals = [r[field] for r in recs if r[field] is not None]
+            if len(vals) < 2:
+                return None
+            mu = sum(vals) / len(vals)
+            return round((sum((v - mu) ** 2 for v in vals) / len(vals)) ** 0.5, 3)
+
         def mean(recs, field):
             vals = [r[field] for r in recs if r[field] is not None]
             return round(sum(vals) / len(vals), 3) if vals else None
@@ -229,6 +236,10 @@ class RunHub:
                     "mean_fairness": mean(rs, "fairness"),
                     "mean_turns": mean(rs, "agent_turns"),
                     "mean_tokens_out": mean(rs, "tokens_out"),
+                    # spread across repeats (population std; None when n<2) —
+                    # for GRPO-style repeat batches, the variance IS data
+                    "std_score": std(rs, "score"),
+                    "std_done_rate": std(rs, "done_rate"),
                     "runs": [r["id"] for r in rs],
                 }
             bands = [r["band"] for r in recs if r["band"] is not None]

@@ -651,6 +651,16 @@ function ovChartSVG(cfg) {
       }
       for (const m of ms) {
         const x = X(m[cfg.x]), y = Y(m[cfg.y]);
+        // repeats carry their spread: a +-1 std error bar on the y metric
+        const sd = m[{mean_score: "std_score",
+                      mean_done_rate: "std_done_rate"}[cfg.y]];
+        if (sd) {
+          const y1 = Y(m[cfg.y] + sd), y2 = Y(m[cfg.y] - sd);
+          marks += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}"
+              stroke="${color}" stroke-width="1.5" opacity=".55" data-bt-vis="${ta}"/>
+            <line x1="${x-3}" y1="${y1}" x2="${x+3}" y2="${y1}" stroke="${color}" opacity=".55" data-bt-vis="${ta}"/>
+            <line x1="${x-3}" y1="${y2}" x2="${x+3}" y2="${y2}" stroke="${color}" opacity=".55" data-bt-vis="${ta}"/>`;
+        }
         // the MODEL is the point's identity: solid model-color fill, big
         // enough to read against the task-colored line, surface-color ring
         // so it pops in both light and dark mode
@@ -726,7 +736,8 @@ function renderBenchTable() {
       const best = scores.length ? Math.max(...scores) : null;
       const chips = models.map(m =>
         `<span class="bt-mchip"><span class="dot" style="background:${modelColor(m.label)}"></span>${
-          esc(labelShort(m.label))} ${fnum(m.mean_score, 2)}</span>`).join("") ||
+          esc(labelShort(m.label))} ${fnum(m.mean_score, 2)}${
+          m.std_score != null ? ` ±${m.std_score.toFixed(2)} <i style="font-style:normal;color:var(--ink-3)">n=${m.n}</i>` : ""}</span>`).join("") ||
         `<span style="color:var(--ink-3);font-size:12px">no LLM probes yet</span>`;
       const open = (BENCH_OPEN[rec.task] || {}).open;
       return `<div class="bt-row" data-bt-row="${escAttr(rec.task)}" title="click for details">
@@ -755,7 +766,7 @@ function benchDetail(rec, names) {
     <tbody>${models.map(m => `<tr>
       <td><span class="chip" style="background:${modelColor(m.label)};border-radius:50%"></span>${esc(m.label)}</td>
       <td class="t">${m.n}</td>
-      <td class="t">${fnum(m.mean_score, 3)}</td>
+      <td class="t">${fnum(m.mean_score, 3)}${m.std_score != null ? ` <span style="color:var(--ink-3)">± ${m.std_score.toFixed(3)}</span>` : ""}</td>
       <td class="t">${fnum(m.mean_done_rate)}</td>
       <td class="t">${fnum(m.mean_fairness)}</td>
       <td class="t">${fnum(m.mean_cost_usd, 2, "$")}</td>
