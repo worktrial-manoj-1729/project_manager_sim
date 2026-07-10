@@ -168,10 +168,17 @@ class RunHub:
                 # Gate on scorecard.json EXISTING = the run FINISHED (don't score
                 # a partial in-progress run — that keeps it flagged `live`); the
                 # mtime cache means this fresh re-score happens once per run.
-                if os.path.exists(sp):
+                # finished = events exist and have gone quiet (>=90s) — or a
+                # scorecard exists. Gating on scorecard alone left runs whose
+                # final scoring step crashed unscorable FOREVER.
+                finished = os.path.exists(ep) and (
+                    os.path.exists(sp)
+                    or _t.time() - os.path.getmtime(ep) >= 90)
+                if finished:
                     try:
                         from .eval import evaluate
-                        sc = evaluate(d)
+                        with LOCK:   # server threads must not duplicate scoring
+                            sc = evaluate(d)
                         score = sc.get("score")
                         if isinstance(sc.get("completion"), dict):
                             completion = sc["completion"].get("normalized")
@@ -183,8 +190,10 @@ class RunHub:
                         if isinstance(sc.get("combined"), dict):
                             band = sc["combined"].get("available")
                     except Exception as ex:
-                        # a live run scoring mid-flight is normal; a FINISHED
-                        # run failing is not — say so, and never cache it
+                        # visible, and CACHED (mtime keys invalidate if the
+                        # run's files ever change) — an uncached failure made
+                        # every poll re-score every legacy run: a thundering
+                        # herd that starved the whole dashboard
                         print("hub: could not score %s: %r" % (rid, ex))
                         score = None
                 n = 0
@@ -198,11 +207,7 @@ class RunHub:
                        "efficiency": efficiency, "done_rate": done_rate,
                        "fairness": fairness, "cost_usd": cost,
                        "tokens_in": tin, "tokens_out": tout, "agent_turns": turns}
-                if score is not None:
-                    # never cache a failed/incomplete scoring: the key's
-                    # files stop changing once a run ends, so a cached None
-                    # would be served forever
-                    self._cache[rid] = (key, rec)
+                self._cache[rid] = (key, rec)
             rec["live"] = (os.path.exists(ep)
                            and (_t.time() - os.path.getmtime(ep)) < 90
                            and rec["score"] is None)
