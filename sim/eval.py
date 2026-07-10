@@ -106,15 +106,17 @@ def evaluate(run_dir):
         available = round(o - b, 3)
         regret = round(available - delta, 3)
         return {
-            # normalized is THE reading: 0 = null baseline, 1 = ideal optimum,
-            # negative = the agent made things worse than not existing.
+            # normalized is THE reading: 0 = null baseline, 1 = the frictionless
+            # INDIVIDUAL-optimal reference, negative = worse than not existing.
+            # NOT clamped: >1 is legitimate and desirable — it means the agent
+            # out-COORDINATED the individual optimum (e.g. swarming idle people
+            # onto a bottleneck), value an individual schedule can't reach. The
+            # reward is affine-invariant to [baseline, OPT] for GRPO, so OPT need
+            # not be a tight or unbeatable ceiling — it's a cheap stable anchor.
             "normalized": (round(delta / available, 3)
                            if available > 0.001 else None),
-            # gain_over_regret = delta/(opt − agent) = N/(1−N), the odds form.
-            # OPT_ideal is a frictionless RELAXATION no real policy reaches,
-            # so `normalized` saturates below 1 and compresses top-end
-            # differences; odds re-expands them (gain per unit of remaining
-            # regret) without needing the unknown frictioned optimum.
+            # gain_over_regret = delta/(opt − agent) = N/(1−N), the odds form;
+            # re-expands top-end differences near/above the reference.
             "gain_over_regret": (round(delta / regret, 3)
                                  if available > 0.001 and regret > 0.001
                                  else None),
@@ -177,7 +179,8 @@ def print_scorecard(result):
         if m["normalized"] is None:
             print("%-11s (nothing available beyond baseline)" % name)
             return
-        print("%-11s %6.3f   [0 = do-nothing baseline, 1 = ideal optimum]"
+        print("%-11s %6.3f   [0 = do-nothing baseline, 1 = solo optimum; "
+              ">1 = collaboration beat it]"
               "   (raw: %.2f -> %.2f -> %.2f)"
               % (name, m["normalized"], m["baseline"], m["agent"], m["opt_ideal"]))
 

@@ -13,7 +13,12 @@ it lands), precedence, effort hours, one-task-at-a-time per person, working
 calendars, and the horizon.
 
 OPT_ideal is a pure function of the scenario file alone — no NPCs, no LLM,
-no agent, no engine version. It's a true upper bound on any achievable
+no agent, no engine version. It is the SOLO ceiling: the best week where
+every task has exactly one owner. Working sessions (bounded swarms) are
+deliberately NOT modeled here — a well-run session can legitimately beat
+this anchor, so normalized scores > 1 mean exactly that: collaboration
+beyond the solo optimum (bounded by the swarm cap and the daily meeting
+caps). Within the solo policy space it remains a true upper bound on any
 score, computable at scenario-generation time, and a stable denominator for
 normalized comparison ("captured X% of ideal") across environment versions.
 
@@ -29,7 +34,7 @@ import json
 import sys
 
 from .rubric import DEFAULT_PRIORITY_WEIGHTS, load_rubric, task_value
-from .tasks import task_view
+from .tasks import physics_of, task_view
 
 
 def _all_tasks(scenario):
@@ -66,14 +71,39 @@ def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
     fixed = [t for t in tasks if not t.get("effort_hours")]
     free = [t for t in tasks if t.get("effort_hours")]
 
+    # BLOCKING QUESTIONS & the ceiling. A frictionless PM answers the instant a
+    # question opens (full info, zero decision cost), so every gating question
+    # resolves at its own open-time -> an empty [at, at) block -> OPT is
+    # unaffected. A real agent can only answer LATER (woken at `at`, reply costs
+    # ≥1 action-min + channel latency), so its block strictly contains OPT's
+    # empty one and the questioned task finishes no earlier than here: agent ≤ OPT.
+    instant_answers = {t["id"]: {q["id"]: q["at"] for q in t.get("questions") or []
+                                 if q.get("gates")}
+                       for t in tasks if t.get("questions")}
+
+    # OPT is the frictionless INDIVIDUAL-optimal reference: one best-skilled
+    # owner per task, no friction, questions answered instantly. It is NOT a
+    # provably-unbeatable ceiling, and deliberately so — COORDINATION mechanics
+    # the agent has but an individual schedule doesn't (chiefly a swarm: pooling
+    # idle teammates onto a bottleneck via meetings) can push a real run ABOVE
+    # this line. That shows up as normalized > 1 and is a FEATURE: it measures
+    # coordination value earned over the no-coordination optimum. Chasing a
+    # tight, swarm-aware, provably-valid bound isn't worth it because the reward
+    # is AFFINE-invariant to [baseline, OPT] — for a fixed scenario B and OPT are
+    # shared constants across all K rollouts, so (x−B)/(OPT−B) leaves the
+    # group-relative GRPO advantage exactly unchanged. OPT earns its keep as a
+    # cheap, stable, interpretable anchor and a difficulty gate, not as a
+    # correctness-critical ceiling. (Swarm is still bounded in the live world —
+    # the per-day meeting cap + focus-tax + one-owner-at-a-time keep any real
+    # overshoot small and finite.)
     def evaluate(assignment, ordering):
-        # frictionless (busy={}) but with REAL skills — OPT's search over
-        # assignments naturally routes each task to its fastest eligible
-        # worker, so it stays a true upper bound (the agent's assignment is
-        # one point in this same search space).
+        # frictionless (busy={}) with REAL skills — the search routes each task
+        # to its fastest eligible worker; the agent's play is one point in this
+        # same (more-constrained, friction-bearing) space.
         candidate = [dict(t, assignees=[a]) for t, a in zip(ordering, assignment)]
         rows = task_view(candidate + fixed, start, horizon,
-                         busy_by_assignee={}, skills=skills)
+                         busy_by_assignee={}, skills=skills,
+                         answers=instant_answers, physics=physics_of(scenario))
         return task_value(rows, tv_cfg, horizon, start, workers=workers)
 
     # three ceilings tracked in ONE search pass: each metric gets its own

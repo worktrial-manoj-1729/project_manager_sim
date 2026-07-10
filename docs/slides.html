@@ -301,12 +301,14 @@ the bill:
     <div class="rail"></div>
     <div class="tick" style="left:10%"><i></i><span><b>&lt; 0</b> made the week worse<br class="sub">pings, churn, busywork</span></div>
     <div class="tick" style="left:38%"><i></i><span><b>0</b> = the unmanaged week<br class="sub">defaults play out, agent does nothing</span></div>
-    <div class="tick" style="left:88%"><i></i><span><b>1</b> = the perfect week<br class="sub">frictionless optimum, exhaustive search</span></div>
+    <div class="tick" style="left:88%"><i></i><span><b>1</b> = the best solo week<br class="sub">every task one owner, zero friction — computed by search</span></div>
   </div>
   <div class="ex">one generated instance <span class="c">(both anchors computed from the config file, before any agent runs)</span>:
   unmanaged week ships <b>58%</b> of the work-weight   → score 0
-  perfect week ships   <b>100%</b>, early              → score 1
-  an agent ships 79%, mostly early                → score <b class="amber">0.41</b>   <span class="c">← the fraction of the gap captured</span></div>
+  best solo week ships <b>100%</b>, early              → score 1
+  an agent ships 79%, mostly early                → score <b class="amber">0.41</b>
+  score <b class="green">&gt; 1</b> is possible — and means one thing: <b>well-run working sessions</b>
+  <span class="c">collaboration is the only lever that can beat the solo optimum (and it's capped)</span></div>
   <p class="cap">The gap's width IS the difficulty: how wrong the week's default assignments are.
   A generator remixes the numbers; gates reject anything unfair or trivial.</p>
 </section>
@@ -393,7 +395,7 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
   <div class="ex">$ python -m sim.generate scenarios/demo.json --tier hard --n 5
 <span class="c">  demo-hard-1100000.json    passed gates: valid ✓  fair ✓  tier: hard ✓</span>
 $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model claude-sonnet-5
-<span class="c">  SCORE: 0.491    (0 = the unmanaged week, 1 = the perfect week)</span></div>
+<span class="c">  SCORE: 0.491    (0 = the unmanaged week, 1 = the best solo week)</span></div>
   <ul style="margin-top:3vh">
     <li>Difficulty is <b>measured, never asserted</b> — fingerprints predict it, model runs confirm it.</li>
     <li>Deterministic end to end — <b>built for training</b>, not just evaluation.</li>

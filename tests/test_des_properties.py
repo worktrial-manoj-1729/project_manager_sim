@@ -8,7 +8,9 @@ Invariants asserted after EVERY fuzzed action:
 
 And at the horizon of every fuzzed week:
   REPLAY      fold(events) == the live world, byte for byte
-  CEILING     score <= 1.0 even for adversarial/nonsense play
+  CEILING     score <= 1.0 for any play WITHOUT task-labeled working
+              sessions (the fuzzer books none) — sessions are the one
+              mechanic that can legitimately exceed the solo optimum
   TERMINATION advance always reaches the horizon
 
 Seeds are FIXED: the fuzz is deterministic, so a failure here is a real,
@@ -107,7 +109,9 @@ class TestDESProperties(unittest.TestCase):
             self.assertEqual(eng.world.messages, world2.messages)
             self.assertEqual(eng.world.log, world2.log)
             self.assertEqual(eng.world.tracker_view(), world2.tracker_view())
-            # CEILING: even adversarial nonsense cannot beat OPT
+            # CEILING (solo policy space): without task-labeled sessions,
+            # nothing beats OPT — collaboration is the sole legitimate
+            # way past it, and this fuzzer never books one
             res = evaluate(eng.run_dir)
             if res["score"] is not None:
                 self.assertLessEqual(res["score"], 1.0,

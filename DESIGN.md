@@ -504,7 +504,7 @@ scenarios never breaks the suite).
   returns, unfair arrivals, value minting, the odds identity.
 - **Property tests** guard the DES claims under seeded random
   interleavings — causality, monotonicity, liveness, replay equality,
-  granularity-irrelevance, and the ceiling (score ≤ 1 even for adversarial
+  granularity-irrelevance, and the solo ceiling (score ≤ 1 even for adversarial
   play) — asserted after *every* fuzzed action. Fixed seeds: a failure is a
   reproducible counterexample, never flake. The fuzzer found a real
   causality hole (co-temporal events left undispatched on wake) within its
