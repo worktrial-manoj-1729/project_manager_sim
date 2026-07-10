@@ -50,6 +50,12 @@
   .band .tick span { display: block; margin-top: .6vh; white-space: nowrap; }
   .foot { font-size: 1.95vh; color: var(--dim); border-top: 1px solid var(--border);
           padding-top: 1.5vh; margin-top: 3vh; }
+  .flow { display: flex; align-items: stretch; gap: 1.2vw; margin: 1vh 0 3.5vh; }
+  .flow .step { flex: 1; background: var(--card); border: 1px solid var(--border);
+                border-radius: 12px; padding: 2vh 1.4vw; text-align: center; }
+  .flow .step b { display: block; font-size: 2.6vh; margin-bottom: .8vh; }
+  .flow .step span { font-size: 1.9vh; color: var(--dim); line-height: 1.35; display: block; }
+  .flow .arrow { align-self: center; color: var(--dim); font-size: 3vh; }
   footer { position: fixed; bottom: 2vh; left: 0; right: 0; display: flex;
            justify-content: space-between; padding: 0 3vw; color: var(--dim);
            font-size: 1.8vh; }
@@ -362,18 +368,26 @@ the only path to a score:
 <section class="slide">
   <div class="kicker">the pipeline</div>
   <h2>From one authored company to a graded curriculum</h2>
-  <p style="font-size:2.9vh; line-height:1.8" class="mono">
-    template ─→ <b class="accent">generate</b> (seeded physics remix)
-    ─→ <b class="amber">gate</b> (valid · fair · difficulty tier)
-    ─→ <b class="violet">stamp</b> the two anchors
-    ─→ <b class="green">run models</b> ─→ live dashboard</p>
-  <div class="ex" style="margin-top:3vh">$ python -m sim.generate scenarios/demo.json --tier hard --n 5
-<span class="c">demo-hard-1100000.json   util 0.94  winnable 9.24  triage True  fair ✓</span>
+  <div class="flow">
+    <div class="step"><b>template</b><span>one hand-authored company &amp; cast</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b class="accent">generate</b><span>seeded remix of the physics</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b class="amber">gate</b><span>valid · fair · difficulty tier</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b class="violet">stamp</b><span>the two score anchors</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b class="green">run &amp; watch</b><span>models play; dashboard grades</span></div>
+  </div>
+  <div class="ex">$ python -m sim.generate scenarios/demo.json --tier hard --n 5
+<span class="c">  demo-hard-1100000.json    util 0.94   winnable 9.24   fair ✓</span>
 $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model claude-sonnet-5
-<span class="c">SCORE: 0.491   (0 = do-nothing, 1 = optimal)</span></div>
-  <p class="cap">Difficulty measured, never asserted. Deterministic end to end — built for
-  training, not just evaluation. Every benchmark point is three clicks from its evidence:
-  task → run → the agent's full untruncated conversation beside the world it produced.</p>
+<span class="c">  SCORE: 0.491    (0 = the unmanaged week, 1 = the perfect week)</span></div>
+  <ul style="margin-top:3vh">
+    <li>Difficulty is <b>measured, never asserted</b> — fingerprints predict it, model runs confirm it.</li>
+    <li>Deterministic end to end — <b>built for training</b>, not just evaluation.</li>
+    <li>Every benchmark point is <b>three clicks from its evidence</b>: task → run → full conversation.</li>
+  </ul>
 </section>
 
 <footer>
