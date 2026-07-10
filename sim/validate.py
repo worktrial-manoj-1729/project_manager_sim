@@ -112,26 +112,23 @@ def validate_scenario(scenario):
         if arr.get("via") not in (None, "chat", "email"):
             errors.append("task_arrivals[%d]: via must be chat|email, got %r"
                           % (i, arr["via"]))
-        fb = arr.get("fallback")
-        if not fb:
-            # a complete no-PM baseline: every real ask eventually gets
-            # picked up by SOMEONE — an arrival with no fallback makes the
-            # baseline artificially weak (free score for merely reacting)
-            errors.append("task_arrivals[%d]: needs a fallback {npc, at} — "
-                          "the org picks up unowned work eventually" % i)
-        else:
-            fb_worker = next((n for n in scenario.get("npcs", [])
-                              if n["id"] == fb.get("npc")), None)
-            if fb_worker is None:
-                errors.append("task_arrivals[%d]: fallback npc %r unknown"
-                              % (i, fb.get("npc")))
-            elif not fb_worker.get("worker", True):
-                errors.append("task_arrivals[%d]: fallback npc %r is a "
-                              "stakeholder — they don't pick up tickets"
-                              % (i, fb["npc"]))
-            if fb.get("at", -1) < arr["at"]:
-                errors.append("task_arrivals[%d]: fallback.at before the "
-                              "arrival itself" % i)
+        # Real work always has an OWNER — an arrival must land already assigned
+        # to a worker (no unowned backlog). A complete no-PM baseline: the
+        # default holder works it, badly if they're the wrong/swamped choice;
+        # the PM earns credit by REARRANGING to a better owner, not by merely
+        # filing something nobody was on.
+        owners = arr["task"].get("assignees") or []
+        if not owners:
+            errors.append("task_arrivals[%d]: task %r has no owner — arrivals "
+                          "must land assigned to a default holder"
+                          % (i, arr["task"]["id"]))
+        for o in owners:
+            osp = next((n for n in scenario.get("npcs", []) if n["id"] == o), None)
+            if osp is None:
+                errors.append("task_arrivals[%d]: owner %r unknown" % (i, o))
+            elif not osp.get("worker", True):
+                errors.append("task_arrivals[%d]: owner %r is a stakeholder — "
+                              "not on the delivery team" % (i, o))
         if arr.get("announce") and not arr.get("npc"):
             errors.append("task_arrivals[%d]: announce needs an npc messenger" % i)
         if not arr.get("announce"):

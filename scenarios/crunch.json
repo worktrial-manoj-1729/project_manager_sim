@@ -17,7 +17,9 @@
       {
         "id": "auth-dep",
         "title": "Auth-service dependency for migration",
-        "assignees": ["dave"],
+        "assignees": [
+          "dave"
+        ],
         "effort_hours": 6,
         "done_hours": 6,
         "reported": "Done (landed 2 days late)",
@@ -26,10 +28,14 @@
       {
         "id": "migration",
         "title": "Database migration (checkout tables)",
-        "assignees": ["sarah"],
+        "assignees": [
+          "sarah"
+        ],
         "effort_hours": 52,
         "done_hours": 22,
-        "blocked_by": ["auth-dep"],
+        "blocked_by": [
+          "auth-dep"
+        ],
         "reported": "~70% done, on track for Friday",
         "priority": "P0",
         "belief": [
@@ -48,17 +54,23 @@
       {
         "id": "data-backfill",
         "title": "Historical data backfill + verification",
-        "assignees": ["sarah"],
+        "assignees": [
+          "sarah"
+        ],
         "effort_hours": 12,
         "done_hours": 0,
-        "blocked_by": ["migration"],
+        "blocked_by": [
+          "migration"
+        ],
         "reported": "Not started",
         "priority": "P0"
       },
       {
         "id": "rate-limiting",
         "title": "API rate limiting",
-        "assignees": ["dave"],
+        "assignees": [
+          "dave"
+        ],
         "effort_hours": 20,
         "done_hours": 10,
         "reported": "About half done",
@@ -73,15 +85,14 @@
       "announce": "A support escalation just landed: Meridian users are hitting SSO login failures — a P1, externally caused, on your service. Tell Alex about it and offer to take it, but be honest about the tradeoff: if you grab it, rate-limiting slips and you definitely can't help Sarah with the migration. Explicitly say it's Alex's call who owns it.",
       "task": {
         "id": "sso-incident",
-        "title": "P1: Meridian SSO login failures (support escalation) — NEEDS OWNER",
+        "title": "P1: Meridian SSO login failures (support escalation)",
         "effort_hours": 8,
         "urgent": true,
-        "reported": "New — external escalation via support; unowned until PM assigns",
-        "priority": "P1"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 2400
+        "reported": "On Dave (auth-service incident)",
+        "priority": "P1",
+        "assignees": [
+          "dave"
+        ]
       }
     },
     {
@@ -92,29 +103,27 @@
         "id": "security-questionnaire",
         "title": "Meridian security questionnaire (legal, pre-launch)",
         "effort_hours": 4,
-        "reported": "New — from Meridian legal; UNOWNED",
-        "priority": "P1"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 7000
+        "reported": "Landed on Sarah by default — she is underwater on the migration",
+        "priority": "P1",
+        "assignees": [
+          "sarah"
+        ]
       }
     },
     {
       "at": 4860,
       "npc": "priya",
       "via": "email",
-      "announce": "Write Alex an email forwarding the exec team's request: they want written launch-readiness confirmation from engineering before the Friday cutover — deployment checklist, rollback plan, monitoring. Someone needs to own collecting and compiling it today. You'd suggest not derailing whoever is heads-down on the critical path.",
+      "announce": "Write Alex an email: the exec team needs engineering to produce the launch-readiness checklist before Friday cutover — the real deployment steps, rollback plan, and monitoring setup, which an ENGINEER has to write (not a formality). It got dropped on Sarah by default, but she is heads-down on the migration and cannot get to it. Flag to Alex that it needs a real owner who has the capacity to land it in time.",
       "task": {
         "id": "readiness-signoff",
-        "title": "Meridian launch-readiness confirmations (compile from engineering)",
+        "title": "Meridian launch-readiness checklist (deployment steps, rollback plan, monitoring — engineering)",
         "effort_hours": 2,
-        "reported": "New — exec request; UNOWNED; needs input from both engineers",
-        "priority": "P1"
-      },
-      "fallback": {
-        "npc": "dave",
-        "at": 7000
+        "reported": "Landed on Sarah by default — needs an engineer who can actually produce it in time",
+        "priority": "P1",
+        "assignees": [
+          "sarah"
+        ]
       }
     }
   ],

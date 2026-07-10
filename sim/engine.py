@@ -531,20 +531,26 @@ class Engine:
                                   task_id=arr["task"].get("id"))
                 self._say("[%s] (external task rejected: %s)" % (self.world.now(), msg))
                 return
-            # The work now EXISTS (truth: someone needs it done) but is NOT
-            # on the tracker — the ask reaches the PM as a communication
-            # (chat = push, email = poll-only) and the PM must file it
-            # officially (add_task with the ticket id) before assigning.
-            task = self.world.add_task(dict(arr["task"], filed=False),
-                                       source="external")
-            self._say("[%s] (external task arrived: %s)" % (self.world.now(), task["title"]))
+            # Real work always has an OWNER — it lands already assigned to a
+            # default holder and ON the board (no unowned backlog). The default
+            # is often sub-optimal (a swamped person, the wrong specialist); the
+            # PM's job is to REARRANGE it (reassign / reprioritize), not file it
+            # from scratch. The ask still reaches the PM as a push so they know
+            # to act. assigned_at = arrival, so the holder works it from now.
+            task = self.world.add_task(
+                dict(arr["task"], filed=True, assigned_at=self.world.clock),
+                source="external")
+            self._say("[%s] (external task arrived: %s -> %s)"
+                      % (self.world.now(), task["title"],
+                         ", ".join(task.get("assignees") or ["unowned"])))
             if npc is not None and arr.get("announce"):
                 via = arr.get("via", "chat")
                 text = self._llm(lambda: npc.ping(self.client, self.world, arr["announce"]))
                 if via == "email":
                     text = "[%s] %s" % (task["title"], text)
-                # rules carry the reference; the LLM only voices the ask
-                text = "%s\n(ticket: %s)" % (text, task["id"])
+                # rules carry the reference + current owner (voice from LLM)
+                text = "%s\n(ticket: %s, currently on %s)" % (
+                    text, task["id"], ", ".join(task.get("assignees") or ["nobody"]))
                 msg = self.world.send_message(npc.id, "agent", text, via=via)
                 if via == "email":
                     self._schedule_email_delivery(msg)
