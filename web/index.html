@@ -132,6 +132,12 @@
   @media (prefers-color-scheme: dark) { .k-task_added { color: #9085e9; } }
 
   /* ---- THE PROBLEM (authored task-dependency graph) ---- */
+  .prob-node.ghost { opacity: .3; border-style: dotted !important; }
+  #traj-score .rub { display: flex; gap: 22px; flex-wrap: wrap; font-size: 14px;
+                     align-items: baseline; }
+  #traj-score .rub b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  #traj-score .rub span i { font-style: normal; color: var(--ink-3); font-size: 11px;
+                            display: block; text-transform: uppercase; letter-spacing: .05em; }
   #problem-panel summary { cursor: pointer; font-size: 12px; letter-spacing: .05em;
     color: var(--ink-3); font-weight: 700; }
   #problem-scroll { overflow: auto; max-height: 32vh; margin-top: 10px; }
@@ -309,6 +315,7 @@
   </section>
 
   <section id="tab-trajectory" class="tab">
+    <div class="panel" id="traj-score" style="margin-bottom:14px;display:none"></div>
     <div class="panel" id="problem-panel" style="margin-bottom:14px;display:none">
       <details id="problem-details" open>
         <summary>THE PROBLEM — what this week throws at the PM</summary>
@@ -857,7 +864,7 @@ function render() {
   else { badge.textContent = "REWIND"; badge.className = "rewind";
     $("scrub-label").textContent = `event #${cursor} — ${fmt(viewClock())}`; }
   renderChat(); renderPending(); renderDocs(); renderTimeline();
-  renderPmTraj(); renderProblem(); renderTrajectory();
+  renderPmTraj(); renderProblem(); renderTrajScore(); renderTrajectory();
 }
 
 // Delivery badge: how the signal travels on each side (stamped by the
@@ -1174,6 +1181,28 @@ function problemDepths(tasks) {
 const PRIO_RANK = {P0: 0, P1: 1, P2: 2, P3: 3};
 const probShort = id => id ? esc(String(actorName[id] || id).split(" ")[0]) : "unowned";
 
+// END RUBRICS: the run's final grades (always at the horizon — rewinding
+// the timeline does not regrade; it replays how the week got there)
+function renderTrajScore() {
+  const el = $("traj-score");
+  if (!el) return;
+  const rec = (RUNS || []).find(r => r.id === currentRun);
+  if (!rec || rec.score == null) { el.style.display = "none"; return; }
+  el.style.display = "";
+  const f = (v, d) => v == null ? "—" : v.toFixed(d == null ? 2 : d);
+  el.innerHTML = `<h3>End rubrics — graded at the horizon (rewind replays, it never regrades)</h3>
+    <div class="rub">
+      <span><i>score</i><b>${f(rec.score, 3)}</b></span>
+      <span><i>completion</i>${f(rec.completion, 3)}</span>
+      <span><i>efficiency</i>${f(rec.efficiency, 3)}</span>
+      <span><i>done-rate</i>${f(rec.done_rate)}</span>
+      <span><i>fairness</i>${f(rec.fairness)}</span>
+      <span><i>band</i>${f(rec.band)}</span>
+      <span><i>cost</i>${rec.cost_usd == null ? "—" : "$" + rec.cost_usd.toFixed(2)}</span>
+      <span><i>turns</i>${rec.agent_turns || "—"}</span>
+    </div>`;
+}
+
 function renderProblem() {
   const panel = $("problem-panel"), host = $("problem-cols");
   if (!panel || !host) return;
@@ -1183,11 +1212,15 @@ function renderProblem() {
   }
   panel.style.display = "";
 
-  // ---- overlay from the FULL event log (horizon, not view()) ----
+  // ---- overlay follows the REWIND CURSOR: scrub back and the moves,
+  // completions, and mid-week arrivals un-happen with the timeline ----
+  const evs = view();
+  const curT = evs.length ? evs[evs.length - 1].t : CLOCK;
+  const atEnd = cursor === null;
   const known = new Set(rec.tasks.map(t => t.id));
   const curOwner = {}, moves = {}, doneAt = {};
   rec.tasks.forEach(t => curOwner[t.id] = t.owner || null);
-  for (const e of EVENTS) {
+  for (const e of evs) {
     if (e.kind === "task_completed") {
       doneAt[e.task_id] = e.completed_at != null ? e.completed_at : e.t;
     } else if (e.kind === "task_updated" && e.source === "agent" &&
@@ -1201,6 +1234,7 @@ function renderProblem() {
   }
   const live = runIsLive();
   const sig = transcriptKey() + ":" + rec.tasks.length + ":" + (live ? "L" : "F")
+            + ":" + curT + ":" + atEnd
             + ":" + JSON.stringify(moves) + ":" + JSON.stringify(doneAt);
   if (host.dataset.psig === sig) return;   // nothing changed -> no DOM churn
 
@@ -1218,6 +1252,7 @@ function renderProblem() {
   const clip = s => { s = String(s); return s.length > 28 ? s.slice(0, 27) + "…" : s; };
   const node = t => {
     const seeded = t.source === "seed";
+    const ghost = t.arrival > curT;   // hasn't landed yet at this cursor
     const p = String(t.priority || "").toUpperCase();
     const pCls = "pn-" + (PRIO_RANK[p] != null ? p.toLowerCase() : "p3");
     const eff = t.effort_hours == null ? "—"
@@ -1230,8 +1265,9 @@ function renderProblem() {
     let ov = (moves[t.id] || []).map(m =>
       `<div class="pn-ov pn-move">${probShort(m.from)} → ${probShort(m.to)} · ${fmt(m.t)}</div>`).join("");
     if (t.id in doneAt) ov += `<div class="pn-ov pn-done">✓ done ${fmt(doneAt[t.id])}</div>`;
-    else if (!live)     ov += `<div class="pn-ov pn-miss">✗ not shipped</div>`;
-    return `<div class="prob-node${seeded ? "" : " lands"}" title="${escAttr(t.title)}"
+    else if (!live && atEnd) ov += `<div class="pn-ov pn-miss">✗ not shipped</div>`;
+    if (ghost) ov = "";               // its whole story is still in the future
+    return `<div class="prob-node${seeded ? "" : " lands"}${ghost ? " ghost" : ""}" title="${escAttr(t.title)}"
         data-prob-id="${escAttr(t.id)}"
         data-prob-deps="${escAttr((t.blocked_by || []).filter(b => known.has(b)).join(","))}">
       <div class="pn-title">${t.urgent ? "⚡ " : ""}${esc(clip(t.title))}</div>
