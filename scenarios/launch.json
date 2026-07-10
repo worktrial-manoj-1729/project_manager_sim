@@ -391,12 +391,12 @@
       "done_weight_rate": 0.556
     },
     "opt_max": {
-      "combined": 35.145,
-      "completion": 42.102,
-      "efficiency": 21.231,
-      "done_weight_rate": 0.704
+      "combined": 38.902,
+      "completion": 46.948,
+      "efficiency": 22.808,
+      "done_weight_rate": 0.778
     },
-    "winnable_combined": 6.761,
+    "winnable_combined": 10.518,
     "log10_trajectory_classes": 18.3,
     "capacity_utilization": 0.62,
     "forced_triage": true,

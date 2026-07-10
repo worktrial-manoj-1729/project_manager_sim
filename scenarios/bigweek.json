@@ -571,15 +571,15 @@
       "done_weight_rate": 0.489
     },
     "opt_max": {
-      "combined": 69.562,
-      "completion": 84.241,
-      "efficiency": 40.203,
-      "done_weight_rate": 0.867
+      "combined": 75.94,
+      "completion": 90.0,
+      "efficiency": 47.82,
+      "done_weight_rate": 1.0
     },
-    "winnable_combined": 25.922,
+    "winnable_combined": 32.3,
     "log10_trajectory_classes": 26.8,
     "capacity_utilization": 1.09,
-    "forced_triage": true,
+    "forced_triage": false,
     "min_reaction_ratio": 1.73,
     "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
   }
