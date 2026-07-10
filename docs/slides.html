@@ -72,7 +72,7 @@
   <p style="margin-top:3vh" class="sub">One simulated week at a SaaS company. An agent is the PM;
   simulated coworkers do the work.</p>
   <div class="ex" style="margin-top:2.5vh">rule #1   LLMs only produce <b>dialogue</b> — every consequence comes from deterministic rules
-result    same seed + same actions = the same week, byte for byte  <span class="c">(GRPO-clean, replayable)</span></div>
+result    same seed + same actions = the same week, byte for byte  <span class="c">(stable rewards for GRPO; every run replayable)</span></div>
   <p style="margin-top:2.5vh"><span class="pill">1 · world: communication &amp; tasks</span>
      <span class="pill">2 · belief updates</span>
      <span class="pill">3 · skills &amp; working sessions</span>
@@ -89,9 +89,8 @@ result    same seed + same actions = the same week, byte for byte  <span class="
 <span class="c">Mon 09:42</span>  the model thinks for 30 real seconds — <b>sim clock doesn't move</b>
 <span class="c">Tue 09:00</span>  overnight, the migration gained 0 hours: nobody works at night —
            progress is <b>computed from the calendar</b>, no process ever "runs"</div>
-  <p class="cap">Everything lands in one append-only event log → any instant can be rebuilt
-  exactly, with zero LLM calls. And nothing is polled: chats wake you mid-skip; email arrives
-  when the next inbox-check event fires.</p>
+  <p class="cap">Every change is one line in a log — any past instant can be rebuilt, no LLM
+  needed. Nothing is polled: chats wake you, email arrives on its own schedule.</p>
 </section>
 
 <!-- 3 · world: communication -->
@@ -127,9 +126,8 @@ result    same seed + same actions = the same week, byte for byte  <span class="
       <p class="cap">the most expensive artifact in any company</p>
     </div>
   </div>
-  <p class="foot">None of these numbers appear in any tool description. Agents learn them from
-  timestamps, from people (<i>the cost is felt</i> — over-pinged coworkers complain in character),
-  or from reward: noisy runs simply score lower.</p>
+  <p class="foot">These numbers appear in no tool description. Agents learn them three ways:
+  timestamps, complaints from over-pinged coworkers, or lower scores.</p>
 </section>
 
 <!-- 3b · no channel dominates -->
@@ -179,10 +177,8 @@ chat/email → words move,
   adds hands but a session</div>
     </div>
   </div>
-  <p class="foot">This is the reward-hacking defense: no channel is decoration and none dominates —
-  a policy that always chats, always emails, or always meets is strictly beaten somewhere,
-  and the physics (not a judge) hands out the loss. Measured: the always-chatting PM scores below
-  zero; the channel-matching PM approaches the ceiling.</p>
+  <p class="foot">No channel always wins → no one-channel shortcut survives. The loss comes from
+  physics, not a judge. Measured: an always-chatting PM scores below zero.</p>
 </section>
 
 <!-- 4 · world: tasks -->
@@ -197,10 +193,9 @@ chat/email → words move,
 your move A:  <span class="c">Tue 11:32</span>  reassign → Sarah        → ships <b class="green">Thu 15:00</b>
 your move B:  <span class="c">Thu 09:00</span>  reassign → Sarah        → work only counts from Thursday → <b class="red">misses Friday</b>
 your move C:  do nothing               → Dave gets to it eventually → <b class="amber">the unmanaged week</b></div>
-  <p class="cap">Coworkers self-schedule sensibly (highest priority first, switching when that
-  changes, half-done work never lost). The PM's levers: <b>move</b> a task, <b>reorder</b> a queue
-  (scheduling only — relabeling priority can't inflate the score), or leave the defaults alone.
-  Option C — the fully unmanaged week — is the score's zero point.</p>
+  <p class="cap">People self-schedule by priority; half-done work is never lost.
+  Your levers: <b>move</b> a task or <b>reorder</b> a queue (relabeling can't inflate the score).
+  Option C — the unmanaged week — is the score's zero point.</p>
 </section>
 
 <!-- 5 · beliefs: three layers -->
@@ -215,9 +210,8 @@ your move C:  do nothing               → Dave gets to it eventually → <b cla
 ask her Monday → you get an honest 70%.        <span class="c">there is no oracle to interrogate.</span>
 and Dave insists: "rate-limiting is launch-critical!"   <span class="c">← authored red herring; it isn't.
                                                   chasing it burns real capacity.</span></div>
-  <p class="cap">Beliefs mature on an authored schedule (deterministic events, no LLM on any
-  information path). The board self-corrects only on <b>completions</b> — the one public,
-  reliable signal in the environment.</p>
+  <p class="cap">Belief changes are scheduled events — no LLM touches information.
+  The board self-corrects only on <b>completions</b>, the one reliable public signal.</p>
 </section>
 
 <!-- 6 · beliefs: the week -->
@@ -230,8 +224,8 @@ and Dave insists: "rate-limiting is launch-critical!"   <span class="c">← auth
 <span class="c">Wed 10:00</span>  you ask again → her honest <i>current</i> belief   <span class="c">(still not truth)</span>
 <span class="c">Thu 16:30</span>  migration actually completes → board flips to <b class="green">Done</b>
            <span class="c">two completions ≈ a speed estimate for that person</span></div>
-  <p class="cap">The graded skill is not truth-extraction — it's operating under honest noise:
-  keep slack against estimates, react fast to confessions, calibrate people from what ships.</p>
+  <p class="cap">The graded skill: operate under honest noise — keep slack, react fast to
+  confessions, calibrate people from what actually ships.</p>
 </section>
 
 <!-- 7 · skills -->
@@ -260,9 +254,8 @@ what the agent can notice:
   → route the next one accordingly</div>
     </div>
   </div>
-  <p class="cap">Identical physics for every rollout of a task (clean group-relative advantages),
-  and nothing an agent can phrase its way into. The scoring ceiling routes by skill too — so
-  "give the db task to the db person" is part of what a perfect week means.</p>
+  <p class="cap">Same physics for every rollout — stable rewards, nothing an agent can talk its
+  way into. The perfect week routes by skill, so discovering specialists is part of the job.</p>
 </section>
 
 <!-- 8 · skills combine in meetings -->
@@ -297,9 +290,7 @@ the bill:
     </div>
   </div>
   <p class="foot">“Adding manpower to a late software project makes it later.” — Fred Brooks,
-  <i>The Mythical Man-Month</i> (1975). The cap and the diminishing weights are that law written
-  as physics: the winning move is swarming skill-matched people on the critical path — and
-  nothing else.</p>
+  <i>The Mythical Man-Month</i> (1975). The cap and the fading weights are that law as physics.</p>
 </section>
 
 <!-- 9 · rubrics: the scale -->
@@ -316,9 +307,8 @@ the bill:
   unmanaged week ships <b>58%</b> of the work-weight   → score 0
   perfect week ships   <b>100%</b>, early              → score 1
   an agent ships 79%, mostly early                → score <b class="amber">0.41</b>   <span class="c">← the fraction of the gap captured</span></div>
-  <p class="cap">The gap's width IS the authored difficulty — it measures how wrong the week's
-  default assignments are. A generator remixes physics (efforts, timings, default owners, ticket
-  ids) under seeded draws; gates reject anything invalid, unfair, or degenerate.</p>
+  <p class="cap">The gap's width IS the difficulty: how wrong the week's default assignments are.
+  A generator remixes the numbers; gates reject anything unfair or trivial.</p>
 </section>
 
 <!-- 9b · complexity levers -->
@@ -342,9 +332,8 @@ the bill:
     <tr><td><b>forced triage</b></td><td>total work &gt; team capacity</td>
         <td>even perfect play must sacrifice — choosing what dies is the skill</td></tr>
   </table>
-  <p class="cap">Every lever is a number in a config file — no prompt engineering, no vibes.
-  A fairness gate bounds them all: an ask must remain completable from the moment
-  the PM could first know of it, or the instance is rejected.</p>
+  <p class="cap">Every lever is a number in a config file. One bound on all of them: a task must
+  stay completable from the moment the PM could know of it — otherwise the instance is rejected.</p>
 </section>
 
 <!-- 10 · rubrics: metrics + evidence -->
@@ -355,7 +344,8 @@ the bill:
 EFFICIENCY = Σ w·done·(horizon − done_at)/span    <span class="c">…and landed early</span>
 COMBINED   = (COMPLETION + γ·EFFICIENCY)/(1+γ)    <span class="c">the reward scalar</span>
 FAIRNESS   = 1 − σ(hours worked / available)      <span class="c">team health, per person</span>
-SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position in the task's band</span></div>
+SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position between the anchors</span>
+           = a·COMBINED + b,  a &gt; 0 fixed per task <span class="c">an affine transform</span></div>
   <div class="cols">
     <div>
       <table style="font-size:1.95vh">
@@ -365,8 +355,12 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position i
         <tr><td class="mono">α = 0.5</td><td>finishing bonus — a shipped task beats an almost-done one</td></tr>
         <tr><td class="mono">γ = 0.5</td><td>earliness weight in the combined scalar</td></tr>
         <tr><td class="mono">horizon, span</td><td>Fri 17:00; span = horizon − Monday start</td></tr>
-        <tr><td class="mono">σ</td><td>population std of utilization over the worker pool</td></tr>
+        <tr><td class="mono">σ</td><td>spread (std dev) of workload across the workers</td></tr>
       </table>
+      <p class="cap">GRPO's group normalization (r − mean)/std is <b style="color:var(--ink)">invariant
+      to affine transforms</b> — within one task, SCORE and raw COMBINED yield identical
+      advantages. The normalization changes nothing for training; its job is to put
+      hundreds of tasks on one scale.</p>
     </div>
     <div>
       <table>
@@ -375,9 +369,8 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position i
         <tr><td>medium</td><td class="num amber">+0.41</td><td class="num green">0.97</td></tr>
         <tr><td>hard <span class="sub">(forced triage)</span></td><td class="num red">−0.26</td><td class="num amber">0.49</td></tr>
       </table>
-      <p class="cap">No keyword checks, no LLM judge, no credit for activity — the only path to a
-      score is a genuinely better week. Ordering holds in all six cells; hard costs even a strong
-      model half its gap.</p>
+      <p class="cap">No keywords, no judge, no credit for activity. Ordering holds in all six
+      cells; hard costs even a strong model half its gap.</p>
     </div>
   </div>
 </section>
@@ -398,7 +391,7 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position i
     <div class="step"><b class="green">run &amp; watch</b><span>models play; dashboard grades</span></div>
   </div>
   <div class="ex">$ python -m sim.generate scenarios/demo.json --tier hard --n 5
-<span class="c">  demo-hard-1100000.json    util 0.94   winnable 9.24   fair ✓</span>
+<span class="c">  demo-hard-1100000.json    passed gates: valid ✓  fair ✓  tier: hard ✓</span>
 $ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model claude-sonnet-5
 <span class="c">  SCORE: 0.491    (0 = the unmanaged week, 1 = the perfect week)</span></div>
   <ul style="margin-top:3vh">
