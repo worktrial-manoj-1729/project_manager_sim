@@ -129,44 +129,79 @@
   <b>seed</b> replays the week byte-for-byte. The scoring band is computed from this file <b>before any agent runs</b>.</p>
 </section>
 
-<!-- 1c · how the world runs: DES timeline -->
+<!-- 1c · how the world runs: DES timeline, trajectory 1/3 -->
 <section class="slide">
-  <div class="kicker">1 · the world — how it runs</div>
-  <h2>One clock that only jumps — one append-only log</h2>
+  <div class="kicker">1 · the world — how it runs · trajectory 1/3</div>
+  <h2>One clock that only jumps — nothing exists between events</h2>
   <div class="tl">
-    <div class="lane you">you — act at "now"</div>
+    <div class="lane you">pm — acts at "now"</div>
     <div class="lane wrld">world — async event heap</div>
     <div class="rail"></div><div class="axis">sim time ▸</div>
-    <div class="adv" style="left:21%; width:20%"></div>
-    <div class="cutx" style="left:31%">✕</div>
+    <div class="adv" style="left:21%; width:24%"></div>
+    <div class="cutx" style="left:33%">✕</div>
     <div class="tick you" style="left:7%"><span class="t">Mon 09:05</span>
       <span><b>ping Sarah</b><br>costs +1 sim-min</span><i></i></div>
     <div class="tick you" style="left:21%"><span class="t">Mon 09:06</span>
       <span><b>advance 3 h</b><br>sleep till 12:06</span><i></i></div>
-    <div class="tick you ghost" style="left:41%"><span class="t">Mon 12:06</span>
+    <div class="tick you ghost" style="left:45%"><span class="t">Mon 12:06</span>
       <span>never reached</span><i></i></div>
-    <div class="tick you" style="left:62%"><span class="t">Tue 09:05</span>
-      <span><b>you call it: OAuth</b><br>api-core unblocked</span><i></i></div>
-    <div class="tick wrld" style="left:31%"><i></i><span class="t">Mon 09:42</span>
-      <span><b>Sarah replies</b><br>chat is push →<br><b class="red">woken early</b></span></div>
-    <div class="tick wrld" style="left:45.5%"><i></i><span class="t">Mon 11:30</span>
-      <span><b>email batch</b> — an arrival<br>lands on <b>the busiest</b></span></div>
-    <div class="tick wrld" style="left:57%"><i></i><span class="t">Tue 09:00</span>
-      <span>Sam: <b>"OAuth or email+pw?"</b><br>api-core <b class="red">STALLS</b></span></div>
-    <div class="tick wrld" style="left:72%"><i></i><span class="t">Tue 13:00</span>
-      <span><b>Sarah: 70% still left</b><br>the blocker surfaces</span></div>
-    <div class="tick wrld" style="left:84%"><i></i><span class="t">Wed 10:00</span>
-      <span><b>booked session fires</b><br>hands pool, transcript logs</span></div>
-    <div class="tick wrld fin" style="left:96%"><i></i><span class="t">Fri 17:00</span>
+    <div class="tick wrld" style="left:33%"><i></i><span class="t">Mon 09:42</span>
+      <span><b>Sarah replies</b><br>chat is push →<br><b class="red">PM woken early</b></span></div>
+    <div class="tick wrld" style="left:62%"><i></i><span class="t">Mon 11:30</span>
+      <span><b>email batch</b><br>inbox delivers on its grid</span></div>
+    <div class="tick wrld" style="left:79%"><i></i><span class="t">Tue 09:00</span>
+      <span><b>overnight: +0 h</b><br>nobody works nights</span></div>
+    <div class="tick wrld fin" style="left:94%"><i></i><span class="t">Fri 17:00</span>
       <span><b>horizon</b><br>grade the world</span></div>
   </div>
-  <p class="cap">Spacing = <b>events, not minutes</b>: between ticks nothing exists — the clock jumps
-  heap-event to heap-event; nights add <b>+0 h</b> (progress is computed from the working calendar).
-  Model thinking time costs <b>zero</b> sim-minutes. Each tick appends one line to a log;
-  <span class="mono">state(t) = fold(log ≤ t)</span> — any instant rebuilds LLM-free, byte-identical.</p>
-  <p class="foot">LLMs write only the words people say; rules decide every consequence — progress, routing,
-  score (random draws keyed by seed). Exact replay + reward a pure function of the agent's actions:
-  the two properties GRPO needs.</p>
+</section>
+
+<!-- 1d · trajectory 2/3: a blocker -->
+<section class="slide">
+  <div class="kicker">1 · the world — how it runs · trajectory 2/3</div>
+  <h2>A blocker's week — stalled, answered, swarmed, shipped</h2>
+  <div class="tl">
+    <div class="lane you">pm — acts at "now"</div>
+    <div class="lane wrld">world — async event heap</div>
+    <div class="rail"></div><div class="axis">sim time ▸</div>
+    <div class="tick wrld" style="left:8%"><i></i><span class="t">Tue 09:00</span>
+      <span>Sam: <b>"OAuth or email+pw?"</b><br>api-core <b class="red">STALLS</b></span></div>
+    <div class="tick you" style="left:21%"><span class="t">Tue 09:05</span>
+      <span><b>PM calls it: OAuth</b><br>api-core unblocked</span><i></i></div>
+    <div class="tick wrld" style="left:37%"><i></i><span class="t">Tue 13:00</span>
+      <span><b>Sarah: 70% still left</b><br>the blocker surfaces</span></div>
+    <div class="tick you" style="left:51%"><span class="t">Tue 13:10</span>
+      <span><b>PM books a 2 h session</b><br>Sarah + Dave, on migration</span><i></i></div>
+    <div class="tick wrld" style="left:66%"><i></i><span class="t">Wed 10:00</span>
+      <span><b>session fires</b><br>hands pool ×1.9</span></div>
+    <div class="tick wrld" style="left:80%"><i></i><span class="t">Wed 12:00</span>
+      <span><b>deposit lands</b><br>+3.8 h at meeting-end</span></div>
+    <div class="tick wrld fin" style="left:94%"><i></i><span class="t">Thu 15:00</span>
+      <span><b>migration ships</b><br>a day early</span></div>
+  </div>
+</section>
+
+<!-- 1e · trajectory 3/3: an ambush arrival -->
+<section class="slide">
+  <div class="kicker">1 · the world — how it runs · trajectory 3/3</div>
+  <h2>An ambush's week — lands on the busiest, the PM rearranges</h2>
+  <div class="tl">
+    <div class="lane you">pm — acts at "now"</div>
+    <div class="lane wrld">world — async event heap</div>
+    <div class="rail"></div><div class="axis">sim time ▸</div>
+    <div class="tick wrld" style="left:8%"><i></i><span class="t">Tue 11:30</span>
+      <span><b>email batch: audit arrives</b><br>auto-owned by Dave — <b>the busiest</b></span></div>
+    <div class="tick you" style="left:24%"><span class="t">Tue 11:45</span>
+      <span><b>PM reads the board</b><br>Dave 30 h deep, Ana free</span><i></i></div>
+    <div class="tick you" style="left:40%"><span class="t">Tue 11:47</span>
+      <span><b>reassign → Ana</b><br>both notified, hours carry</span><i></i></div>
+    <div class="tick you" style="left:56%"><span class="t">Tue 11:48</span>
+      <span><b>reorder Dave's queue</b><br>P0 back on top</span><i></i></div>
+    <div class="tick wrld fin" style="left:74%"><i></i><span class="t">Thu 15:00</span>
+      <span><b>audit ships</b><br>Ana had the room</span></div>
+    <div class="tick wrld ghost" style="left:91%"><i></i><span class="t">(unmanaged)</span>
+      <span>Dave gets to it "eventually"<br><b class="red">misses the week</b></span></div>
+  </div>
 </section>
 
 <!-- 3 · world: communication -->
@@ -614,10 +649,6 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
     <div class="arrow">→</div>
     <div class="step"><b class="green">run &amp; watch</b><span>models play; dashboard grades</span></div>
   </div>
-  <div class="ex">$ python -m sim.generate scenarios/demo.json --tier hard --n 5
-<span class="c">  demo-hard-1100000.json    passed gates: valid ✓  fair ✓  tier: hard ✓</span>
-$ python -m sim.harness scenarios/gen/demo-hard-1100000.json --probe llm --model claude-sonnet-5
-<span class="c">  SCORE: 0.491    (0 = the unmanaged week, 1 = the best solo week)</span></div>
   <ul style="margin-top:3vh">
     <li>Difficulty is <b>measured, never asserted</b> — an ablation audit shows which decision owns which slice of the band.</li>
     <li>Scales cleanly: from a 3-person crunch to a <b>21-task, 8-person week</b> (bigweek) — winnable band ~26, trajectory-classes 10^27.</li>
