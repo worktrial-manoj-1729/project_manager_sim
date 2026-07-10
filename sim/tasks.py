@@ -105,7 +105,14 @@ def _primary(t):
 
 
 def _schedulable(t):
-    return t.get("assignees") and t.get("effort_hours") is not None
+    # Agent-CREATED tasks are tracking-only: they never consume worker
+    # capacity. Symmetric with scoring (agent tasks carry zero weight) — an
+    # agent can neither mint value NOR destroy it by inventing fake work that
+    # eats an engineer's week. Real work reaches the board as seed tasks or
+    # FILED external tickets (source stays "external"); only invented
+    # source=="agent" items are excluded.
+    return (t.get("assignees") and t.get("effort_hours") is not None
+            and t.get("source") != "agent")
 
 
 def compute_schedule(tasks, sim_start, busy_by_assignee=None):

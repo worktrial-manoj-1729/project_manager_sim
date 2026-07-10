@@ -14,11 +14,23 @@ from .sim_time import wall_now
 
 
 def new_run_dir(base="runs"):
-    run_id = ("run-" + datetime.datetime.fromtimestamp(wall_now())
-              .strftime("%Y%m%d-%H%M%S"))  # TELEMETRY: naming only
-    path = os.path.join(base, run_id)
-    os.makedirs(path, exist_ok=True)
-    return path
+    # Second-granularity stamp for legibility, but PARALLEL runs (ladders,
+    # the Max@k bench) can launch many within one second — so claim a UNIQUE
+    # dir atomically (makedirs without exist_ok fails if taken) and bump a
+    # suffix on collision. Never share a run dir: two runs writing one
+    # events.jsonl silently corrupts both logs (interleaved arrivals, garbage
+    # replay/scores).
+    stamp = datetime.datetime.fromtimestamp(wall_now()).strftime("%Y%m%d-%H%M%S")
+    n = 0
+    while True:
+        n += 1
+        run_id = "run-%s%s" % (stamp, "" if n == 1 else "-%d" % n)
+        path = os.path.join(base, run_id)
+        try:
+            os.makedirs(path)  # atomic claim; races lose here and retry
+            return path
+        except FileExistsError:
+            continue
 
 
 def setup_logging(run_dir):

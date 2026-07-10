@@ -16,16 +16,25 @@ Checks:
 """
 
 import json
+import os
+import shutil
 import sys
+import tempfile
 
 from .engine import Engine
 from .eval import StubClient
 from .rubric import load_rubric
 from .sim_time import fmt
 
+# smoke engines write to a throwaway dir, never pollute runs/
+_SMOKE_ROOT = tempfile.mkdtemp(prefix="sim-smoke-")
+_SEQ = [0]
+
 
 def _engine(scenario):
-    return Engine(scenario, client=StubClient(), verbose=False)
+    _SEQ[0] += 1
+    return Engine(scenario, client=StubClient(), verbose=False,
+                  run_dir=os.path.join(_SMOKE_ROOT, "e%d" % _SEQ[0]))
 
 
 def _horizon(scenario):
@@ -213,6 +222,28 @@ def check_preemptive_resume(_scenario):
                   "non-retroactive" % (acc(pre, "A", 570) * 100, len(sp["A"]["segments"])))
 
 
+def check_agent_tasks_free(_scenario):
+    """Agent-CREATED tasks must never consume worker capacity — otherwise an
+    agent could tank its own score by inventing fake work that eats an
+    engineer's week (zero scoring weight, but real capacity cost). A real
+    task's completion must be identical whether or not an agent task sits on
+    the same person."""
+    from .tasks import compute_schedule
+    START = 540
+    real = {"id": "R", "title": "R", "assignees": ["x"], "effort_hours": 2.0,
+            "priority": "P0", "done_hours": 0, "arrival": START, "source": "seed"}
+    junk = {"id": "J", "title": "J", "assignees": ["x"], "effort_hours": 5.0,
+            "priority": "P0", "done_hours": 0, "arrival": START, "source": "agent"}
+    alone = compute_schedule([dict(real)], START)
+    withjunk = compute_schedule([dict(real), dict(junk)], START)
+    if withjunk["R"]["done_at"] != alone["R"]["done_at"]:
+        return False, ("agent task delayed the real task: R done %s vs %s"
+                       % (withjunk["R"]["done_at"], alone["R"]["done_at"]))
+    if "J" in withjunk:
+        return False, "agent task J was scheduled (should be tracking-only)"
+    return True, "agent-created work consumes zero capacity (R unaffected, J unscheduled)"
+
+
 CHECKS = [
     ("causality", check_causality),
     ("stops-at-push", check_stops_at_push),
@@ -220,6 +251,7 @@ CHECKS = [
     ("determinism", check_determinism),
     ("wait-for-reply", check_wait_for_reply),
     ("preemptive-resume", check_preemptive_resume),
+    ("agent-tasks-free", check_agent_tasks_free),
     ("harness-drive", check_harness_drives_to_horizon),
 ]
 
@@ -239,6 +271,7 @@ def main():
         failed += not ok
     print("\n%s (%d/%d passed)"
           % ("ALL PASS" if not failed else "FAILURES", len(CHECKS) - failed, len(CHECKS)))
+    shutil.rmtree(_SMOKE_ROOT, ignore_errors=True)   # never pollute runs/
     sys.exit(1 if failed else 0)
 
 
