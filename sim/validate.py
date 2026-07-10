@@ -86,6 +86,14 @@ def validate_scenario(scenario):
         msg = check_task_bounds(t, 0, b)
         if msg:
             errors.append("%s[%s]: %s" % (where, t["id"], msg))
+        # a task has EXACTLY ONE owner — the scheduler works only assignees[0],
+        # so a longer list would silently ignore the rest. Multiple people on
+        # one task is expressed as a MEETING (a temporary, costed swarm), never
+        # as extra assignees.
+        if len(t.get("assignees") or []) > 1:
+            errors.append("%s[%s]: a task has one owner, got %d — put multiple "
+                          "people on it via a meeting, not extra assignees"
+                          % (where, t["id"], len(t["assignees"])))
         for a in t.get("assignees", []):
             if a not in npc_ids:
                 errors.append("%s[%s]: unknown assignee %r" % (where, t["id"], a))
