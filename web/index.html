@@ -1079,14 +1079,25 @@ document.addEventListener("click", ev => {
 });
 
 function renderConversation(el, msgs) {
+  // the conversation follows the REWIND CURSOR too: scrub back and later
+  // turns disappear — a demo can replay the week decision by decision.
+  // (messages without a sim_t, e.g. the system prompt, always show)
+  let curT = null;
+  if (cursor !== null) {
+    const evs = view();
+    curT = evs.length ? evs[evs.length - 1].t : CLOCK;
+    msgs = msgs.filter(m => m.sim_t == null || m.sim_t <= curT);
+  }
   $("pm-traj-head").textContent =
-    `Agent conversation — ${msgs.length} messages (system / user / assistant / tool)`;
-  // only touch the DOM when the transcript actually changed — a re-render
+    `Agent conversation — ${msgs.length} messages (system / user / assistant / tool)` +
+    (curT !== null ? ` — rewound to ${fmt(curT)}` : "");
+  // only touch the DOM when the visible slice actually changed — a re-render
   // would collapse open <details> and yank the reader's scroll position
-  const key = transcriptKey() + ":" + msgs.length;
+  const key = transcriptKey() + ":" + msgs.length + ":" + curT;
   if (el.dataset.tkey === key) return;
   el.dataset.tkey = key;
   el.innerHTML = msgs.map(convCard).join("");
+  if (curT !== null) el.scrollTop = el.scrollHeight;   // land on the "now" edge
 }
 
 // chronological list of everything the PM DID (and every push it received),
