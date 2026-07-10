@@ -23,6 +23,7 @@ DEFAULT_BOUNDS = {
     "max_beats": 20,
     "max_meeting_minutes": 240,    # no all-day meetings
     "max_horizon_days": 14,        # events must land inside the run window
+    "max_questions_per_task": 3,   # a task can't be an endless blocking series
 }
 
 
@@ -86,14 +87,11 @@ def validate_scenario(scenario):
         msg = check_task_bounds(t, 0, b)
         if msg:
             errors.append("%s[%s]: %s" % (where, t["id"], msg))
-        # a task has EXACTLY ONE owner — the scheduler works only assignees[0],
-        # so a longer list would silently ignore the rest. Multiple people on
-        # one task is expressed as a MEETING (a temporary, costed swarm), never
-        # as extra assignees.
-        if len(t.get("assignees") or []) > 1:
-            errors.append("%s[%s]: a task has one owner, got %d — put multiple "
-                          "people on it via a meeting, not extra assignees"
-                          % (where, t["id"], len(t["assignees"])))
+        # a task MAY have several assignees: when more than one works it at once
+        # it runs at the damped parallel_rate (a meeting lifts that to a swarm).
+        # More hands is sublinear and costs their own work, so it's a real
+        # tradeoff, not a free win. assignees[0] remains the accountable owner
+        # (belief holder / question owner default).
         for a in t.get("assignees", []):
             if a not in npc_ids:
                 errors.append("%s[%s]: unknown assignee %r" % (where, t["id"], a))
@@ -111,6 +109,33 @@ def validate_scenario(scenario):
             if j > 0 and not (start <= bel.get("at", -1) <= horizon):
                 errors.append("%s[%s]: belief[%d].at outside run window"
                               % (where, t["id"], j))
+            held = bel.get("held_by")
+            if held is not None and held not in worker_ids:
+                errors.append("%s[%s]: belief[%d].held_by=%r must be a worker "
+                              "(the person carrying the stale estimate)"
+                              % (where, t["id"], j, held))
+        # blocking questions: a gating question suspends the task until the PM
+        # replies to its OWNER. Must open in-window, be owned by the task's sole
+        # worker, and carry an id (completability is checked in the fairness gate).
+        qs = t.get("questions") or []
+        if len(qs) > b["max_questions_per_task"]:
+            errors.append("%s[%s]: %d questions > max_questions_per_task=%d"
+                          % (where, t["id"], len(qs), b["max_questions_per_task"]))
+        owner = (t.get("assignees") or [None])[0]
+        for j, q in enumerate(qs):
+            if "id" not in q:
+                errors.append("%s[%s]: questions[%d] needs an id" % (where, t["id"], j))
+            if not (start <= q.get("at", -1) <= horizon):
+                errors.append("%s[%s]: questions[%d].at outside run window"
+                              % (where, t["id"], j))
+            held = q.get("held_by", owner)
+            if held != owner:
+                errors.append("%s[%s]: questions[%d].held_by=%r is not the task's "
+                              "owner %r — only the doer can be blocked on it"
+                              % (where, t["id"], j, held, owner))
+            if owner is not None and owner not in worker_ids:
+                errors.append("%s[%s]: a blocking question needs a worker owner, "
+                              "got %r" % (where, t["id"], owner))
 
     for i, arr in enumerate(arrivals):
         if not (start <= arr["at"] <= horizon):
@@ -169,6 +194,12 @@ def validate_scenario(scenario):
                     "%d remain after the PM can first know of it (%s %s)"
                     % (i, arr["task"]["id"], need, window,
                        arr.get("via", "chat"), "delivery"))
+        # A blocking question is fair BY CONSTRUCTION: answered the instant it
+        # opens it is identical to no question at all (empty [at, at) block), so
+        # a prompt reply always recovers the no-question outcome — the winnable
+        # value is exactly the stall the PM saves. The only trap is a question
+        # opening in dead time (no working minutes left to matter), which the
+        # in-window check above already forbids. So no extra effort-fits gate.
     for i, beat in enumerate(beats):
         if not (start <= beat["at"] <= horizon):
             errors.append("beats[%d]: at=%d outside run window" % (i, beat["at"]))

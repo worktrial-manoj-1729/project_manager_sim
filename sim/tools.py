@@ -51,11 +51,16 @@ def _view_calendar(engine, args):
     now = engine.world.clock
     out = []
     for m in sorted(engine.world.meetings, key=lambda m: m["start"]):
-        out.append({"topic": m["topic"],
-                    "start": fmt(m["start"]), "end": fmt(m["end"]),
-                    "attendees": m["attendees"],
-                    "status": ("past" if m["end"] <= now else
-                               "now" if m["start"] <= now else "upcoming")})
+        if m.get("cancelled"):
+            continue
+        row = {"id": m["id"], "topic": m["topic"],
+               "start": fmt(m["start"]), "end": fmt(m["end"]),
+               "attendees": m["attendees"],
+               "status": ("past" if m["end"] <= now else
+                          "now" if m["start"] <= now else "upcoming")}
+        if m.get("task"):
+            row["task"] = m["task"]
+        out.append(row)
     return {"now": engine.world.now(), "meetings": out}
 
 
@@ -107,10 +112,26 @@ TOOLS = [
                       if a.get("effort_hours") else {})))),
 
     _tool("assign_task",
-          "Assign or reassign a task to a coworker.",
+          "Assign or reassign a task to a coworker (replaces the current owner).",
           {"task_id": {"type": "string"}, "npc": {"type": "string"}},
           ["task_id", "npc"],
           lambda e, a: e.agent_assign_task(a["task_id"], a["npc"])),
+
+    _tool("add_helper",
+          "Put an EXTRA person on a task alongside its owner so they work it in "
+          "parallel. More hands finish it sooner but with diminishing returns, "
+          "and it takes the helper off their own work — worth it for a real "
+          "bottleneck or an idle teammate, not by default.",
+          {"task_id": {"type": "string"}, "npc": {"type": "string"}},
+          ["task_id", "npc"],
+          lambda e, a: e.agent_add_helper(a["task_id"], a["npc"])),
+
+    _tool("drop_helper",
+          "Take a helper back off a task, returning them to their own work "
+          "(can't remove the only owner — reassign instead).",
+          {"task_id": {"type": "string"}, "npc": {"type": "string"}},
+          ["task_id", "npc"],
+          lambda e, a: e.agent_drop_helper(a["task_id"], a["npc"])),
 
     _tool("reprioritize",
           "Change how a task ranks in its assignee's work queue: set a "
@@ -130,16 +151,27 @@ TOOLS = [
 
     _tool("schedule_meeting",
           "Book a meeting at a future time. Include 'agent' in attendees to "
-          "attend yourself. A transcript is kept.",
+          "attend yourself. A transcript is kept. Optionally set 'task' to a "
+          "task id to make it a working session on that task with those people.",
           {"attendees": {"type": "array", "items": {"type": "string"}},
            "start_in_minutes": {"type": "integer"},
            "duration_minutes": {"type": "integer"},
            "topic": {"type": "string"},
-           "agenda": {"type": "string"}},
+           "agenda": {"type": "string"},
+           "task": {"type": "string"}},
           ["attendees", "start_in_minutes", "duration_minutes", "topic"],
           lambda e, a: e.agent_schedule_meeting(
               a["attendees"], e.world.clock + int(a["start_in_minutes"]),
-              int(a["duration_minutes"]), a["topic"], a.get("agenda", ""))),
+              int(a["duration_minutes"]), a["topic"], a.get("agenda", ""),
+              a.get("task"))),
+
+    _tool("cancel_meeting",
+          "Cancel a meeting that hasn't started yet, freeing its attendees' "
+          "time. Use the meeting id from view_calendar. A meeting that is "
+          "already underway or finished cannot be cancelled.",
+          {"meeting_id": {"type": "string"}},
+          ["meeting_id"],
+          lambda e, a: e.agent_cancel_meeting(a["meeting_id"])),
 
     _tool("talk_in_meeting",
           "Speak in the meeting you are attending right now (only works while "

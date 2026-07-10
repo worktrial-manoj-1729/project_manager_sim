@@ -176,9 +176,15 @@
             color: var(--ink-2); margin-bottom: 10px; flex-wrap: wrap; }
   .legend svg { vertical-align: -3px; }
   #pm-traj { max-height: 70vh; overflow-y: auto; font-size: 13px; }
-  .pm-row { padding: 3px 8px; border-left: 3px solid var(--c-agent); margin: 2px 0; }
+  .pm-row { padding: 3px 8px; border-left: 3px solid var(--c-agent); margin: 2px 0;
+            cursor: pointer; }
   .pm-row .t { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 6px; }
   .pm-row.inbound { border-left-color: var(--baseline); color: var(--ink-2); }
+  /* trimmed by default; click the row to swap in the untrimmed text */
+  .pm-row .fulltext { display: none; white-space: pre-wrap; word-break: break-word; }
+  .pm-row.open .clipped { display: none; }
+  .pm-row.open .fulltext { display: inline; }
+  .pm-row.open { background: var(--work-band); }
 
   /* ---- agent conversation (real transcript, chat format) ---- */
   .conv-msg { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
@@ -1033,6 +1039,11 @@ function convCard(m) {
 }
 
 let PM_VIEW = "chat";   // "chat" = OpenAI format · "readable" = action list
+// readable rows are trimmed at ~110 chars — clicking one expands it in place
+document.addEventListener("click", ev => {
+  const r = ev.target.closest(".pm-row");
+  if (r && r.querySelector(".fulltext")) r.classList.toggle("open");
+});
 document.addEventListener("click", ev => {
   const b = ev.target.closest(".pmv");
   if (!b) return;
@@ -1072,11 +1083,30 @@ function renderPmTraj() {
     "PM trajectory — every agent action, in order (dim rows = pushes the PM received)" +
     (PM_VIEW === "chat" && rec ? " (no agent transcript for this run)" : "");
   const short = id => (actorName[id] || id || "?").split(" ")[0];
-  const clip = s => esc(String(s).length > 110 ? String(s).slice(0, 110) + "…" : s);
+  // clipped by default; the FULL text ships in the row and a click swaps
+  // them (no truncation hidden from the reader — see the pm-row CSS)
+  const clip = (s) => {
+    s = String(s);
+    if (s.length <= 110) return esc(s);
+    return `<span class="clipped">${esc(s.slice(0, 110))}…</span>` +
+           `<span class="fulltext">${esc(s)}</span>`;
+  };
   const rows = [];
   const row = (t, html, inbound) => rows.push(
     `<div class="pm-row${inbound ? " inbound" : ""}"><span class="t">[${fmt(t)}]</span>${html}</div>`);
-  for (const e of view()) {
+  // one send, many recipients: batch copies share an EXPLICIT `group` id in
+  // the event log (never inferred from timestamps/text) — render one row
+  const evs = view();
+  const seenGroups = new Set();
+  for (const e of evs) {
+    if (e.kind === "message" && e.sender === "agent" && e.group != null) {
+      if (seenGroups.has(e.group)) continue;
+      seenGroups.add(e.group);
+      const tos = evs.filter(f => f.kind === "message" && f.group === e.group)
+                     .map(f => short(f.recipient));
+      row(e.t, `✉ → <b>${tos.join(", ")}</b>: ${clip(e.text)}`);
+      continue;
+    }
     if (e.kind === "message" && e.sender === "agent")
       row(e.t, `${e.via === "email" ? "✉" : "💬"} → <b>${short(e.recipient)}</b>: ${clip(e.text)}`);
     else if (e.kind === "message" && e.recipient === "agent")

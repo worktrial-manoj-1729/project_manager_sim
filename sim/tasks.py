@@ -20,6 +20,8 @@ Scheduling semantics (deterministic, PREEMPTIVE, work-conserving):
   board, never scheduled.
 """
 
+import math
+
 from .sim_time import MIN_PER_DAY, WORK_END, WORK_START
 
 
@@ -115,25 +117,86 @@ def _schedulable(t):
             and t.get("source") != "agent")
 
 
-def _task_multiplier(t, skills):
-    """Speed factor for task t under its CURRENT primary assignee: geometric
-    mean of that person's skill factors over the task's matching tags (frozen
-    config; default 1.0 when either side is absent). >1 = the specialist works
-    it faster. HIDDEN from the PM — inferred only from how fast work actually
-    completes. So `m` calendar-minutes of work = `m` effort-minutes done."""
-    if not skills:
-        return 1.0
-    sk = skills.get(_primary(t)) or {}
-    tags = [tag for tag in (t.get("tags") or []) if tag in sk]
+# Pooling physics are PART OF THE TASK (scenario config), not magic constants —
+# a scenario can dial how much coordination overhead its work carries. These are
+# only fallbacks when a scenario doesn't override `physics`.
+DEFAULT_PHYSICS = {
+    "parallel_cap": 1.5,    # uncoordinated parallel work barely helps (Brooks)
+    "parallel_decay": 0.35,  # 3 people on one task ≈ 1.5x, not 3x
+    "swarm_cap": 2.5,       # a MEETING (synced) can push ~2.5x, never explode
+    "swarm_decay": 0.6,     # meeting collaborators add diminishing but real help
+}
+
+
+def physics_of(scenario):
+    p = dict(DEFAULT_PHYSICS)
+    p.update((scenario or {}).get("physics", {}))
+    return p
+
+
+def belief_hours_left(entry, effort_hours):
+    """A belief entry's estimate of work-hours LEFT. Authored as a FRACTION of
+    total effort (`remaining_frac`, 0..1) — scale-invariant, so a generator can
+    rescale a task's effort and the belief tracks automatically — and surfaced
+    to people as hours. `remaining_hours` (absolute) is still accepted for
+    hand-authoring; None means the entry is the legacy %-done form."""
+    if entry.get("remaining_frac") is not None:
+        return entry["remaining_frac"] * (effort_hours or 0)
+    return entry.get("remaining_hours")
+
+
+def _person_skill_on(t, person, skills):
+    """One person's effective speed on task t: geomean over t's tags of their
+    skill factors (default 1.0 for tags they have no listed skill in)."""
+    tags = t.get("tags") or []
     if not tags:
         return 1.0
+    sk = (skills or {}).get(person) or {}
     prod = 1.0
     for tag in tags:
-        prod *= sk[tag]
+        prod *= sk.get(tag, 1.0)
     return prod ** (1.0 / len(tags))
 
 
-def compute_schedule(tasks, sim_start, busy_by_assignee=None, skills=None):
+def _capped_additive(rates, decay, cap):
+    """Diminishing-returns pooling: contributions sorted desc, weighted
+    1, decay, decay², … The cap bounds the POOLING gain, never a single
+    worker's own rate — so one worker always works at exactly their skill
+    (even a >cap specialist), and the floor is the best individual."""
+    ordered = sorted(rates, reverse=True)
+    if not ordered:
+        return 0.0
+    total, w = 0.0, 1.0
+    for c in ordered:
+        total += c * w
+        w *= decay
+    return max(ordered[0], min(cap, total))
+
+
+def parallel_rate(t, workers, skills, physics=None):
+    """Rate when several people are assigned to task t and work it AT THE SAME
+    TIME but WITHOUT a meeting — heavily damped: unsynchronized hands on one task
+    conflict and duplicate, so extra people add little. A single worker just gets
+    their own skill rate (so single-owner scheduling — OPT, the baseline, most
+    tasks — is unchanged). A MEETING turns these same people into an effective
+    swarm (swarm_rate); that gap is exactly what a meeting buys."""
+    p = physics or DEFAULT_PHYSICS
+    return _capped_additive((_person_skill_on(t, w, skills) for w in workers),
+                            p["parallel_decay"], p["parallel_cap"])
+
+
+def swarm_rate(t, attendees, skills, physics=None):
+    """Rate a task runs at when `attendees` SWARM it in a meeting: the same
+    capped-additive pooling as parallel_rate but LIGHTLY damped and a higher cap
+    — the meeting is the synchronization that makes extra hands actually land.
+    So meeting > uncoordinated parallel > solo, and each is bounded."""
+    p = physics or DEFAULT_PHYSICS
+    return _capped_additive((_person_skill_on(t, a, skills) for a in attendees),
+                            p["swarm_decay"], p["swarm_cap"])
+
+
+def compute_schedule(tasks, sim_start, busy_by_assignee=None, skills=None,
+                     deposits=None, answers=None, physics=None):
     """Fully PREEMPTIVE, event-sourced scheduler. At every instant each person
     works their highest-priority READY task; the moment that changes — a
     higher-priority task arrives or unblocks, or the PM reprioritizes at a
@@ -153,34 +216,69 @@ def compute_schedule(tasks, sim_start, busy_by_assignee=None, skills=None):
     busy_by_assignee = busy_by_assignee or {}
     creation = {t["id"]: i for i, t in enumerate(tasks)}
     sched = {t["id"]: t for t in tasks if _schedulable(t)}
+    # a task may have MULTIPLE assignees; each person appears against every task
+    # they're on and, at any instant, works their single highest-priority ready
+    # one. When several land on the SAME task at once it runs at parallel_rate
+    # (damped); a meeting lifts that to swarm_rate via a deposit.
     persons = {}
     for tid, t in sched.items():
-        persons.setdefault(_primary(t), []).append(tid)
+        for a in (t.get("assignees") or []):
+            persons.setdefault(a, []).append(tid)
 
-    # remaining is CALENDAR-minutes = effort-minutes / skill-multiplier, so a
-    # faster specialist finishes sooner. mult is kept per task so progress
-    # readouts can convert calendar-work back to true effort-hours.
-    mult = {tid: _task_multiplier(sched[tid], skills) for tid in sched}
+    # `remaining` is EFFORT-minutes still needed. A task completes when live work
+    # (its active workers × parallel_rate, banked per interval) PLUS meeting
+    # deposits (a swarm banked at the meeting's end) reach the effort.
     remaining = {tid: max(0.0, round((sched[tid]["effort_hours"]
-                                      - sched[tid].get("done_hours", 0))
-                                     * 60.0 / mult[tid]))
+                                      - sched[tid].get("done_hours", 0)) * 60.0))
                  for tid in sched}
+    deposits = deposits or {}
+    # answers: {task_id: {question_id: answered_at}} — when the PM's reply to a
+    # BLOCKING question was delivered. A gating question suspends its task from
+    # its open-time until answered_at (never, if absent). Derived upstream from
+    # the message log (real run) / instant (OPT) / empty (no-PM baseline).
+    answers = answers or {}
     segments = {tid: [] for tid in sched}
-    done_at, started = {}, {}
-    # tasks already complete at seed (done_hours == effort) are done the moment
-    # they exist — set done_at up front so blockers referencing them clear.
+    done_at, started, applied = {}, {}, set()
     for tid in sched:
         if remaining[tid] <= 0:
             done_at[tid] = _earliest(sched[tid], sim_start)
 
-    # decision times we know statically: when each task becomes holdable
-    # (arrival/assignment) and every reprioritization timestamp. Completions
-    # are discovered dynamically as the sim advances.
     statics = set()
     for tid, t in sched.items():
         statics.add(_earliest(t, sim_start))
         for ev in t.get("order_events") or []:
             statics.add(ev.get("at", sim_start))
+        for (end, _dep) in deposits.get(tid, []):
+            statics.add(end)   # a meeting's output lands at its end
+        for q in t.get("questions") or []:
+            if q.get("gates"):
+                statics.add(q["at"])                     # block opens
+                ans = answers.get(tid, {}).get(q["id"])
+                if ans is not None:
+                    statics.add(ans)                     # block clears
+    # busy-interval edges are decision points too: a person's availability (and
+    # thus a task's active-worker set and rate) can only change at these.
+    for iv in busy_by_assignee.values():
+        for (s, e) in iv:
+            statics.add(s)
+            statics.add(e)
+
+    def free_at(pers, clock):
+        for (s, e) in busy_by_assignee.get(pers, ()):
+            if s <= clock < e:
+                return False   # in a meeting / eating a refocus-tax interval
+        return True
+
+    def apply_deposits(clock):
+        # a meeting on task T banks `dep` effort-minutes into T when it ends
+        for tid in sched:
+            for i, (end, dep) in enumerate(deposits.get(tid, [])):
+                if end <= clock and (tid, i) not in applied and remaining[tid] > 0:
+                    applied.add((tid, i))
+                    remaining[tid] -= dep
+                    if remaining[tid] <= 1e-6:
+                        remaining[tid] = 0
+                        done_at.setdefault(tid, end)
 
     def ready(tid, clock):
         t = sched[tid]
@@ -189,68 +287,89 @@ def compute_schedule(tasks, sim_start, busy_by_assignee=None, skills=None):
         for b in t.get("blocked_by", []):
             if b in sched and (b not in done_at or done_at[b] > clock):
                 return False  # a scheduled blocker isn't finished by `clock`
+        for q in t.get("questions") or []:
+            # a gating question the owner raised suspends the task from its
+            # open-time until the PM's answer is DELIVERED (answered_at). No
+            # answer, or one not yet delivered by `clock` -> the owner is stuck.
+            if q.get("gates") and q["at"] <= clock:
+                ans = answers.get(tid, {}).get(q["id"])
+                if ans is None or ans > clock:
+                    return False
         return True
 
     clock, INF, guard = sim_start, float("inf"), 0
+    apply_deposits(clock)
     while any(r > 0 for r in remaining.values()) and guard < 100000:
         guard += 1
-        # who works what at `clock`: each person's highest-priority ready task
+        # each person works their single highest-priority ready assigned task
         chosen = {}
         for pers, tids in persons.items():
             avail = [tid for tid in tids if ready(tid, clock)]
             chosen[pers] = (min(avail, key=lambda x: (_order_at(sched[x], clock),
                                                       creation[x]))
                             if avail else None)
-        # next decision point: earliest completion of a chosen task, or the
-        # next static event after `clock`
-        nxt, comp = INF, {}
+        # group the FREE workers landing on each task -> its live rate this step
+        active = {}
         for pers, tid in chosen.items():
-            if tid is None:
+            if tid is not None and free_at(pers, clock):
+                active.setdefault(tid, []).append(pers)
+        rate = {tid: parallel_rate(sched[tid], ws, skills, physics)
+                for tid, ws in active.items()}
+        # next decision point: earliest completion at the current rates, or a
+        # static event (arrival / reprioritization / meeting end / busy edge)
+        nxt, comp = INF, {}
+        for tid, r in rate.items():
+            if r <= 0:
                 continue
-            c = add_work_minutes(clock, remaining[tid], busy_by_assignee.get(pers, ()))
-            comp[pers] = c
+            # active workers are free across [clock, nxt) (busy edges are static)
+            c = add_work_minutes(clock, math.ceil(remaining[tid] / r), ())
+            comp[tid] = c
             nxt = min(nxt, c)
         for s in statics:
             if s > clock:
                 nxt = min(nxt, s)
         if nxt == INF:
             break  # everyone idle and no future event — remaining tasks stuck
-        # accrue each chosen task's work over [clock, nxt); switch happens at nxt
-        for pers, tid in chosen.items():
-            if tid is None:
-                continue
-            w = work_minutes_between(clock, nxt, busy_by_assignee.get(pers, ()))
+        for tid, r in rate.items():
+            w = work_minutes_between(clock, nxt, ())
             if w <= 0:
-                continue  # [clock, nxt) had no working minutes for this person
-            segments[tid].append((clock, nxt, pers))
+                continue  # [clock, nxt) had no working minutes
+            segments[tid].append((clock, nxt, r))
             started.setdefault(tid, clock)
-            remaining[tid] -= w
+            remaining[tid] -= w * r              # EFFORT accrued at the live rate
             if remaining[tid] <= 1e-6:
                 remaining[tid] = 0
-                done_at[tid] = comp.get(pers, nxt)
+                done_at.setdefault(tid, comp.get(tid, nxt))
         clock = nxt
+        apply_deposits(clock)   # meeting outputs landing at `nxt`
 
     return {tid: {"start": started.get(tid), "done_at": done_at.get(tid),
-                  "segments": segments[tid], "mult": mult[tid]}
+                  "segments": segments[tid]}
             for tid in sched}
 
 
-def _accrued_hours(seg_row, sim_start_seed, now, busy_by_assignee):
-    """True EFFORT-hours done on a task by `now`: seed progress + the fold of
-    its work segments up to `now`, converted from calendar-minutes back to
-    effort via the task's skill multiplier (m calendar-min = m effort-min)."""
+def _accrued_hours(seg_row, sim_start_seed, now, task_deposits=()):
+    """True EFFORT-hours done on a task by `now`: seed progress + live work
+    (each segment's effort = its live rate × the working minutes it covered,
+    with the workers free by construction) + any MEETING deposits landed by
+    `now` (a swarm banked at the meeting's end)."""
     acc = 0.0
-    for (s, e, pers) in seg_row["segments"]:
+    for (s, e, rate) in seg_row["segments"]:
         if s >= now:
             break
-        acc += work_minutes_between(s, min(e, now), busy_by_assignee.get(pers, ()))
-    return sim_start_seed + acc * seg_row.get("mult", 1.0) / 60.0
+        acc += rate * work_minutes_between(s, min(e, now), ())
+    dep = sum(d for (end, d) in task_deposits if end <= now)
+    return sim_start_seed + (acc + dep) / 60.0
 
 
-def task_view(tasks, sim_start, now, busy_by_assignee=None, skills=None):
+def task_view(tasks, sim_start, now, busy_by_assignee=None, skills=None,
+              deposits=None, answers=None, physics=None):
     """Ground-truth task states at `now`. Tasks not yet arrived are omitted."""
     busy_by_assignee = busy_by_assignee or {}
-    sched = compute_schedule(tasks, sim_start, busy_by_assignee, skills)
+    deposits = deposits or {}
+    answers = answers or {}
+    sched = compute_schedule(tasks, sim_start, busy_by_assignee, skills,
+                             deposits, answers, physics)
     out = []
     for t in tasks:
         if t.get("arrival", sim_start) > now:
@@ -278,7 +397,7 @@ def task_view(tasks, sim_start, now, busy_by_assignee=None, skills=None):
             s = sched[t["id"]]
             effort, base = t["effort_hours"], t.get("done_hours", 0)
             done_at = s["done_at"]
-            true_done = _accrued_hours(s, base, now, busy_by_assignee)
+            true_done = _accrued_hours(s, base, now, deposits.get(t["id"], ()))
             if done_at is not None and now >= done_at:
                 status, true_done = "done", effort
             else:
@@ -289,8 +408,14 @@ def task_view(tasks, sim_start, now, busy_by_assignee=None, skills=None):
                 blocked = any(b in sched and (sched[b]["done_at"] is None
                                               or now < sched[b]["done_at"])
                               for b in t.get("blocked_by", []))
+                # an open, still-unanswered gating question also shows as blocked
+                q_blocked = any(
+                    q.get("gates") and q["at"] <= now
+                    and (answers.get(t["id"], {}).get(q["id"]) is None
+                         or answers[t["id"]][q["id"]] > now)
+                    for q in t.get("questions") or [])
                 status = ("in_progress" if active
-                          else "blocked" if blocked else "queued")
+                          else "blocked" if (blocked or q_blocked) else "queued")
             row.update(
                 status=status,
                 true_done_hours=round(true_done, 1),
@@ -301,7 +426,9 @@ def task_view(tasks, sim_start, now, busy_by_assignee=None, skills=None):
     return out
 
 
-def task_done(tasks, sim_start, now, task_id, busy_by_assignee=None, skills=None):
-    sched = compute_schedule(tasks, sim_start, busy_by_assignee or {}, skills)
+def task_done(tasks, sim_start, now, task_id, busy_by_assignee=None, skills=None,
+              deposits=None, answers=None, physics=None):
+    sched = compute_schedule(tasks, sim_start, busy_by_assignee or {}, skills,
+                             deposits or {}, answers or {}, physics)
     s = sched.get(task_id)
     return s is not None and s["done_at"] is not None and now >= s["done_at"]

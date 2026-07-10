@@ -29,7 +29,7 @@ import sys
 from .optimal import _all_tasks, _skills_of, opt_ideal, worker_ids
 from .rubric import load_rubric, task_value
 from .sim_time import fmt, working_minutes_between
-from .tasks import compute_schedule, task_view
+from .tasks import compute_schedule, physics_of, task_view
 
 
 def baseline_value(scenario, rubric):
@@ -43,8 +43,12 @@ def baseline_value(scenario, rubric):
                   assigned_at=fb[t["id"]]["at"])
              if t["id"] in fb and not t.get("assignees") else t
              for t in _all_tasks(scenario)]
+    # answers={} (default): the no-PM baseline never answers a blocking
+    # question, so a gated task stalls from its open-time onward — that stall is
+    # exactly the value a proactive PM recovers by replying.
     rows = task_view(tasks, start, horizon, busy_by_assignee={},
-                     skills=_skills_of(scenario))
+                     skills=_skills_of(scenario), answers={},
+                     physics=physics_of(scenario))
     return task_value(rows, rubric.get("task_value", {}), horizon, start)
 
 
@@ -95,13 +99,22 @@ def fingerprint(scenario, rubric=None):
             fairness.append({"id": a["task"]["id"], "kind": "arrival",
                              "reaction_ratio": round(window / need, 2)})
     # confessions: after a belief correction reveals the real state, enough
-    # calendar must remain to absorb the revealed remaining work
+    # calendar must remain to absorb the revealed remaining work. Measured under
+    # REASONABLE play — a sensible PM answers a blocking question promptly, so
+    # the progress-so-far here assumes instant answers (else an unanswered
+    # question would stall the task and make an otherwise-reactable slip look
+    # unfair, which is a floor-of-play artifact, not a real trap).
+    instant_answers = {t["id"]: {q["id"]: q["at"] for q in t.get("questions") or []
+                                 if q.get("gates")}
+                       for t in _all_tasks(scenario) if t.get("questions")}
     for t in tasks:
         for bel in (t.get("belief") or []):
             if "at" not in bel:
                 continue
             rows_at = task_view(_all_tasks(scenario), start, bel["at"],
-                                busy_by_assignee={}, skills=_skills_of(scenario))
+                                busy_by_assignee={}, skills=_skills_of(scenario),
+                                answers=instant_answers,
+                                physics=physics_of(scenario))
             row = next((r for r in rows_at if r["id"] == t["id"]), None)
             left = (t["effort_hours"] - (row["true_done_hours"] if row else 0))
             if left <= 0:

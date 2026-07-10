@@ -13,7 +13,8 @@ class Message:
     sender: str      # "agent" or an npc id
     recipient: str
     text: str
-    via: str = "chat"   # "chat" | "email"
+    via: str = "chat"     # "chat" | "email"
+    group: int = None     # shared id when ONE send has many recipients
 
 
 class World:
@@ -36,12 +37,33 @@ class World:
         for t in (self.project or {}).get("tasks", []):
             t = dict(t, arrival=self.start_time, source="seed")
             beliefs = t.get("belief") or []
-            if beliefs and "at" not in beliefs[0]:
-                t["belief_pct"] = beliefs[0].get("pct")
-                t["belief_note"] = beliefs[0].get("note", "")
+            if beliefs:
+                # a belief belongs to a PERSON (held_by) — their stale estimate,
+                # pinned so it doesn't drift to whoever the PM reassigns it to.
+                # Authored as a fraction of total effort (`remaining_frac`,
+                # scale-invariant), surfaced as REMAINING work-hours; `pct` (%
+                # done) stays for older scenarios.
+                from .tasks import belief_hours_left
+                t["belief_holder"] = beliefs[0].get("held_by") or \
+                    (t.get("assignees") or [None])[0]
+                if "at" not in beliefs[0]:
+                    t["belief_pct"] = beliefs[0].get("pct")
+                    t["belief_remaining"] = belief_hours_left(
+                        beliefs[0], t.get("effort_hours"))
+                    t["belief_note"] = beliefs[0].get("note", "")
             self.tasks.append(t)
         self.completed_announced = set()  # completions made public so far
-        self.meetings = []     # {id, start, end, attendees, topic, agenda}
+        # meetings already on the calendar at week start (authored). A meeting
+        # labelled to a task swarms it (boost); an unlabelled / wrong-room one
+        # is pure overhead the PM should cancel. `deletable`-style flags aren't
+        # needed — value is emergent from who's in the room vs the task.
+        self.meetings = []     # {id, start, end, attendees, topic, agenda, task}
+        for i, mm in enumerate(scenario.get("meetings", [])):
+            self.meetings.append({
+                "id": mm.get("id", "seed-mtg-%d" % i),
+                "start": mm["start"], "end": mm["end"],
+                "attendees": mm["attendees"], "topic": mm.get("topic", "meeting"),
+                "agenda": mm.get("agenda", ""), "task": mm.get("task")})
         self.transcripts = []  # {meeting_id, t, attendees, topic, text}
         self.docs = []         # {id, title, content, shared_with, t}
 
@@ -76,12 +98,23 @@ class World:
 
     # -- meetings / transcripts / docs --------------------------------------
 
-    def add_meeting(self, start, end, attendees, topic, agenda=""):
+    def add_meeting(self, start, end, attendees, topic, agenda="", task=None):
         m = {"id": "mtg-%d" % len(self.meetings), "start": start, "end": end,
-             "attendees": attendees, "topic": topic, "agenda": agenda}
+             "attendees": attendees, "topic": topic, "agenda": agenda,
+             "task": task}
         self.meetings.append(m)
         self.record("meeting_scheduled", **m)
         return m
+
+    def cancel_meeting(self, meeting_id):
+        """Mark a (future) meeting cancelled — logged so replay reconstructs it.
+        Frees the attendees' block and voids the meeting's swarm deposit."""
+        for m in self.meetings:
+            if m["id"] == meeting_id:
+                m["cancelled"] = True
+                self.record("meeting_cancelled", meeting_id=meeting_id)
+                return m
+        return None
 
     def active_meeting_with(self, who):
         """The meeting `who` is sitting in right now, if any."""
@@ -138,6 +171,8 @@ class World:
                    if n.get("worker", True)}
         busy = {}
         for m in self.meetings:
+            if m.get("cancelled"):
+                continue  # a cancelled meeting never happens — frees the block
             for a in m["attendees"]:
                 busy.setdefault(a, []).append((m["start"], m["end"]))
         last_end = {}
@@ -200,7 +235,11 @@ class World:
 
     def belief_view(self, npc_id):
         """A holder's honest current picture of THEIR OWN tasks — belief(t),
-        which can be wrong; never the scheduler's truth."""
+        which can be wrong; never the scheduler's truth. The stale estimate
+        belongs to a PERSON (belief_holder): only they carry the blind spot, so
+        a fresh owner the PM reassigns to just tracks reality. Estimates are in
+        REMAINING work-hours where authored (decision-relevant, owner-invariant),
+        falling back to a % for older scenarios."""
         out = []
         for t in self.tasks:
             if npc_id not in t.get("assignees", []):
@@ -209,15 +248,22 @@ class World:
                 continue
             if t["id"] in self.completed_announced:
                 out.append({"task": t["title"], "your_view": "done"})
-            elif t.get("belief_pct") is not None:
-                out.append({"task": t["title"],
-                            "your_view": "~%s%% — %s" % (t["belief_pct"],
-                                                         t.get("belief_note", ""))})
+                continue
+            holds = npc_id == t.get("belief_holder")
+            if holds and t.get("belief_remaining") is not None:
+                view = "~%.0fh of work left — %s" % (t["belief_remaining"],
+                                                     t.get("belief_note", ""))
+            elif holds and t.get("belief_pct") is not None:
+                view = "~%s%% — %s" % (t["belief_pct"], t.get("belief_note", ""))
             else:
-                # no authored belief: the holder tracks this one accurately
+                # not the blind-spot holder (or no belief): track accurately,
+                # reported as remaining hours to keep the picture in one unit
                 row = next((r for r in self.tasks_view() if r["id"] == t["id"]), None)
-                pct = row["pct"] if row and row.get("pct") is not None else "?"
-                out.append({"task": t["title"], "your_view": "~%s%% done" % pct})
+                td = row["true_done_hours"] if row and row.get("true_done_hours") \
+                    is not None else t.get("done_hours", 0)
+                left = max(0.0, t.get("effort_hours", 0) - td)
+                view = "~%.0fh of work left" % left
+            out.append({"task": t["title"], "your_view": view})
         return out
 
     def skills(self):
@@ -227,22 +273,77 @@ class World:
         return {n["id"]: n["skills"] for n in self.scenario.get("npcs", [])
                 if n.get("skills")}
 
+    def meeting_deposits(self):
+        """{task_id: [(meeting_end, effort_minutes)]} — a meeting labelled to a
+        task, whose OWNER attends, banks a chunk of collaborative work into that
+        task at its end: work-minutes x swarm_rate(attendees). Cancelled
+        meetings bank nothing. This is the meeting-as-swarm mechanism, derived
+        (replayable) from the meeting list + hidden skills."""
+        from .tasks import physics_of, swarm_rate, work_minutes_between
+        sk = self.skills()
+        phys = physics_of(self.scenario)
+        out = {}
+        for m in self.meetings:
+            tid = m.get("task")
+            if not tid or m.get("cancelled"):
+                continue
+            t = self.find_task(tid)
+            if t is None:
+                continue
+            owner = (t.get("assignees") or [None])[0]
+            if owner not in m["attendees"]:
+                continue  # the doer wasn't in the room — no work happens on T
+            dur = work_minutes_between(m["start"], m["end"])
+            dep = dur * swarm_rate(t, m["attendees"], sk, phys)
+            if dep > 0:
+                out.setdefault(tid, []).append((m["end"], dep))
+        return out
+
+    def question_answers(self):
+        """{task_id: {question_id: answered_at}} — when the PM's reply to each
+        BLOCKING question was DELIVERED to its owner. Derived (replayable) from
+        the message log + config, like meeting_deposits(): the FIRST agent->owner
+        message at/after a question's open-time answers it, and the delivery time
+        is the channel latency — chat lands instantly, email waits for the next
+        answer-batch tick (the async cost the PM is trading against the chat
+        focus-tax). A question with no reply yet stays unanswered (stalled)."""
+        batch = self.scenario.get("answer_batch_minutes", 120)
+        out = {}
+        for t in self.tasks:
+            owner = (t.get("assignees") or [None])[0]
+            for q in t.get("questions") or []:
+                if not q.get("gates"):
+                    continue
+                reply = next((m for m in self.messages
+                              if m.sender == "agent" and m.recipient == owner
+                              and m.time >= q["at"]), None)
+                if reply is None:
+                    continue
+                delivered = (reply.time if reply.via == "chat"
+                             else (reply.time // batch + 1) * batch)
+                out.setdefault(t["id"], {})[q["id"]] = delivered
+        return out
+
     def tasks_view(self, at=None):
         """Ground-truth task states — DERIVED state: a pure function of time."""
         if not self.tasks:
             return []
-        from .tasks import task_view
+        from .tasks import physics_of, task_view
         return task_view(self.tasks, self.start_time,
                          self.clock if at is None else at,
-                         self.busy_by_assignee(), self.skills())
+                         self.busy_by_assignee(), self.skills(),
+                         self.meeting_deposits(), answers=self.question_answers(),
+                         physics=physics_of(self.scenario))
 
     def task_done(self, task_id, at=None):
         if not self.tasks:
             return False
-        from .tasks import task_done
+        from .tasks import physics_of, task_done
         return task_done(self.tasks, self.start_time,
                          self.clock if at is None else at, task_id,
-                         self.busy_by_assignee(), self.skills())
+                         self.busy_by_assignee(), self.skills(),
+                         self.meeting_deposits(), answers=self.question_answers(),
+                         physics=physics_of(self.scenario))
 
     # -- the sim clock: one owner, one mutation point, monotonic ------------
 
@@ -274,12 +375,16 @@ class World:
 
     # -- messages ----------------------------------------------------------
 
-    def send_message(self, sender, recipient, text, via="chat"):
-        msg = Message(len(self.messages), self.clock, sender, recipient, text, via)
+    def send_message(self, sender, recipient, text, via="chat", group=None):
+        """`group`: one send, many recipients — every copy carries the same
+        explicit group id in the log, so tooling never infers batches from
+        timestamps or text matching."""
+        msg = Message(len(self.messages), self.clock, sender, recipient, text,
+                      via, group)
         self.messages.append(msg)
         # text is captured in the log: replay never needs the LLM again
         self.record("message", sender=sender, recipient=recipient,
-                    msg_id=msg.id, text=text, via=via)
+                    msg_id=msg.id, text=text, via=via, group=group)
         return msg
 
     def chat_history(self, npc_id):

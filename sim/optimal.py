@@ -58,6 +58,32 @@ def _skills_of(scenario):
     return {n["id"]: n["skills"] for n in scenario["npcs"] if n.get("skills")}
 
 
+def _greedy_assignments(free, workers, skills, weights):
+    """A shortlist of near-optimal solo assignments for instances too big to
+    search exhaustively — used only as the reference anchor, not a proof of
+    optimality. (1) best-skill per task; (2) a load-balanced pass: heaviest
+    tasks first, each to its top-skilled worker, breaking ties by who's least
+    loaded so no one specialist becomes everyone's bottleneck."""
+    from .tasks import _person_skill_on
+    best_skill = {t["id"]: max(workers, key=lambda w: _person_skill_on(t, w, skills))
+                  for t in free}
+    load = {w: 0.0 for w in workers}
+    balanced = {}
+    for t in sorted(free, key=lambda t: -(weights.get(t.get("priority") or "P2", 2)
+                                          * (t["effort_hours"] - t.get("done_hours", 0)))):
+        pick = min(workers, key=lambda w: (-_person_skill_on(t, w, skills), load[w]))
+        balanced[t["id"]] = pick
+        load[pick] += t["effort_hours"] - t.get("done_hours", 0)
+    # de-dup (they often coincide when there's no contention)
+    out, seen = [], set()
+    for c in (best_skill, balanced):
+        key = tuple(sorted(c.items()))
+        if key not in seen:
+            seen.add(key)
+            out.append(c)
+    return out
+
+
 def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
     rubric = rubric or load_rubric(scenario)
     tv_cfg = rubric.get("task_value", {})
@@ -99,8 +125,9 @@ def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
     def evaluate(assignment, ordering):
         # frictionless (busy={}) with REAL skills — the search routes each task
         # to its fastest eligible worker; the agent's play is one point in this
-        # same (more-constrained, friction-bearing) space.
-        candidate = [dict(t, assignees=[a]) for t, a in zip(ordering, assignment)]
+        # same (more-constrained, friction-bearing) space. `assignment` maps
+        # task-id -> worker.
+        candidate = [dict(t, assignees=[assignment[t["id"]]]) for t in ordering]
         rows = task_view(candidate + fixed, start, horizon,
                          busy_by_assignee={}, skills=skills,
                          answers=instant_answers, physics=physics_of(scenario))
@@ -117,23 +144,33 @@ def opt_ideal(scenario, rubric=None, max_exhaustive=200000):
     if [t["id"] for t in by_weight] != [t["id"] for t in free]:
         orderings.append(by_weight)
 
+    # candidate assignments (task-id -> worker). Small instances: EXHAUSTIVE
+    # (every worker^task combo — the exact solo optimum). Large instances:
+    # a GREEDY shortlist (best-skill per task + a load-balanced pass). Since OPT
+    # is a cheap REFERENCE anchor (the reward is affine-invariant to it), a
+    # near-optimal greedy anchor on big weeks is fine — a slightly loose anchor
+    # doesn't change any GRPO advantage, it just shifts the 0..1 label.
     n_combos = len(workers) ** len(free) * len(orderings)
-    if n_combos > max_exhaustive:
-        raise SystemExit("instance too large for exhaustive OPT (%d combos); "
-                         "add a relaxation bound" % n_combos)
+    if n_combos <= max_exhaustive:
+        candidates = [{t["id"]: w for t, w in zip(free, combo)}
+                      for combo in itertools.product(workers, repeat=len(free))]
+        searched = n_combos
+    else:
+        candidates = _greedy_assignments(free, workers, skills, weights)
+        searched = -len(candidates)   # negative flags the greedy path
 
     best = {"completion": (-1.0, None), "efficiency": (-1.0, None),
             "done_weight_rate": (-1.0, None), "combined": (-1.0, None, None)}
     for ordering in orderings:
-        for assignment in itertools.product(workers, repeat=len(free)):
-            v = evaluate(assignment, ordering)
-            named = dict(zip((t["id"] for t in ordering), assignment))
+        for named in candidates:
+            v = evaluate(named, ordering)
             for metric in ("completion", "efficiency", "done_weight_rate"):
                 if (v[metric] or 0) > best[metric][0]:
                     best[metric] = (v[metric], named)
             if v["combined"] > best["combined"][0]:
                 best["combined"] = (v["combined"], named, v)
     v_best = best["combined"][2]
+    n_combos = searched
     return {
         "opt_completion": best["completion"][0],
         "opt_efficiency": best["efficiency"][0],

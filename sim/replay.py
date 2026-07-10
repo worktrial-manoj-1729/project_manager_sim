@@ -38,7 +38,8 @@ def replay(scenario, events, until_seq=None):
         if e["kind"] == "message":
             world.messages.append(
                 Message(e["msg_id"], e["t"], e["sender"], e["recipient"],
-                        e.get("text", ""), e.get("via", "chat"))
+                        e.get("text", ""), e.get("via", "chat"),
+                        e.get("group"))
             )
         elif e["kind"] == "task_added":
             world.tasks.append(e["task"])
@@ -49,8 +50,13 @@ def replay(scenario, events, until_seq=None):
         elif e["kind"] == "task_completed":
             world.completed_announced.add(e["task_id"])
         elif e["kind"] == "meeting_scheduled":
-            world.meetings.append(
-                {k: e[k] for k in ("id", "start", "end", "attendees", "topic", "agenda")})
+            m = {k: e[k] for k in ("id", "start", "end", "attendees", "topic", "agenda")}
+            m["task"] = e.get("task")
+            world.meetings.append(m)
+        elif e["kind"] == "meeting_cancelled":
+            for m in world.meetings:
+                if m["id"] == e["meeting_id"]:
+                    m["cancelled"] = True
         elif e["kind"] == "transcript":
             world.transcripts.append(
                 {k: e[k] for k in ("meeting_id", "t", "attendees", "topic", "text")})

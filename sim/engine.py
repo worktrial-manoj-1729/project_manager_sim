@@ -61,6 +61,16 @@ class Engine:
                     self._schedule(b["at"], "belief_update",
                                    {"task": t["id"], "idx": i})
 
+        # Blocking questions: at its open-time the owner hits a decision they
+        # can't make alone and pings the PM — their work on the task suspends
+        # until the PM's answer is DELIVERED (the block itself is derived in
+        # World.question_answers; here we only fire the ping + stall awareness).
+        for t in self.world.tasks:
+            for i, q in enumerate(t.get("questions") or []):
+                if q.get("gates"):
+                    self._schedule(q["at"], "question_ping",
+                                   {"task": t["id"], "idx": i})
+
         # Each NPC's experience opens with their honest (possibly wrong)
         # picture of their own work — belief, never scheduler truth.
         for npc in self.world.npcs.values():
@@ -203,13 +213,27 @@ class Engine:
         return due
 
     def agent_email(self, npc_ids, subject, body):
-        """Email one or more people; each replies on the (slower) email
-        profile. Unknown addresses bounce instead of crashing the world."""
+        """One GROUP email: composed once (one action-minute regardless of
+        recipient count), delivered to every recipient at the same instant,
+        and every recipient SEES the to-line — "Hi both" is coherent because
+        both know who else got it. Unknown addresses bounce, never crash."""
         text = "[%s] %s" % (subject, body)
         known = [n for n in npc_ids if n in self.world.npcs]
         bounced = [n for n in npc_ids if n not in self.world.npcs]
+        if known:
+            self._advance_action_clock()   # one composition, one cost
+        agent_name = self.world.scenario.get("agent_name", "the PM")
+        gid = len(self.world.messages) if len(known) > 1 else None
         for nid in known:
-            self.agent_say(nid, text, via="email")
+            npc = self.world.npcs[nid]
+            self.world.send_message("agent", nid, text, via="email", group=gid)
+            others = [self.world.npcs[o].name for o in known if o != nid]
+            cc = (", also to %s" % ", ".join(others)) if others else ""
+            npc.notify(self.world.clock,
+                       "%s (email%s): %s" % (agent_name, cc, text))
+            npc.unanswered_emails += 1
+            self._say("[%s] you -> %s (email): %s"
+                      % (self.world.now(), npc.name, text))
         out = {"sent": bool(known)}
         if bounced:
             out["bounced"] = bounced
@@ -246,6 +270,61 @@ class Engine:
         # tracker-shaped acknowledgement, never the truth dict (beliefs,
         # scheduler fields stay hidden)
         return {"assigned": task_id, "to": npc_id, "title": task["title"]}
+
+    def _restamp_owners(self, task_id, new_assignees, verb):
+        """Change a task's assignee SET, banking progress-so-far and stamping the
+        instant so the recompute credits the new roster only from NOW (no
+        retroactive parallel work). Shared by add_helper / drop_helper."""
+        row = next((r for r in self.world.tasks_view() if r["id"] == task_id), None)
+        changes = {"assignees": new_assignees, "assigned_at": self.world.clock}
+        if row and row.get("true_done_hours") is not None:
+            changes["done_hours"] = row["true_done_hours"]
+        task = self.world.update_task(task_id, changes, "agent")
+        return task
+
+    def agent_add_helper(self, task_id, npc_id):
+        """Put an EXTRA person on a task alongside its owner. While both work it
+        they share the damped parallel_rate — faster wall-clock, but sublinear
+        (coordination overhead) and it costs the helper their own work. Worth it
+        for a bottleneck / an idle teammate, not as a default."""
+        task = self.world.find_task(task_id)
+        if task is None or task.get("filed") is False:
+            return {"error": "no task %r on the tracker" % task_id}
+        if npc_id not in self.world.npcs:
+            return {"error": "unknown person %r" % npc_id}
+        spec = next(n for n in self.world.scenario["npcs"] if n["id"] == npc_id)
+        if not spec.get("worker", True):
+            return {"error": "%s is a stakeholder — they don't take tickets"
+                    % self.world.npcs[npc_id].name}
+        owners = task.get("assignees") or []
+        if npc_id in owners:
+            return {"error": "%s is already on %r" % (npc_id, task_id)}
+        self._advance_action_clock()
+        self._restamp_owners(task_id, owners + [npc_id], "add")
+        self.world.npcs[npc_id].notify(self.world.clock,
+                                       "you're now helping on: '%s'" % task["title"])
+        self._say("[%s] you added %s to help on %s"
+                  % (self.world.now(), self.world.npcs[npc_id].name, task_id))
+        return {"task_id": task_id, "assignees": owners + [npc_id]}
+
+    def agent_drop_helper(self, task_id, npc_id):
+        """Take a helper back OFF a task (return them to their own work). Can't
+        drop the last/only owner — reassign that instead."""
+        task = self.world.find_task(task_id)
+        if task is None or task.get("filed") is False:
+            return {"error": "no task %r on the tracker" % task_id}
+        owners = task.get("assignees") or []
+        if npc_id not in owners:
+            return {"error": "%s isn't on %r" % (npc_id, task_id)}
+        if len(owners) <= 1:
+            return {"error": "can't drop the only owner of %r — reassign it"
+                    % task_id}
+        self._advance_action_clock()
+        remaining = [a for a in owners if a != npc_id]
+        self._restamp_owners(task_id, remaining, "drop")
+        self._say("[%s] you took %s off %s"
+                  % (self.world.now(), self.world.npcs[npc_id].name, task_id))
+        return {"task_id": task_id, "assignees": remaining}
 
     def agent_reprioritize(self, task_id, priority=None, urgent=None):
         """Reorder a task in its holder's work queue. SCHEDULING only: the
@@ -290,19 +369,44 @@ class Engine:
         self._say("[%s] you updated tracker note on %s" % (self.world.now(), task_id))
         return {"task_id": task_id, "reported": note}
 
-    def agent_schedule_meeting(self, attendees, start, duration, topic, agenda=""):
-        """Book a meeting. Costs every attendee real working capacity."""
+    def agent_schedule_meeting(self, attendees, start, duration, topic,
+                               agenda="", task=None):
+        """Book a meeting. Costs every attendee real working capacity. Label it
+        with a `task` to make it a SWARM session — the labelled task's owner
+        works it at the pooled (all-attendees) rate for the block, so pulling
+        the right specialist onto a bottleneck accelerates it. Unlabelled or
+        wrong-room meetings are pure overhead."""
+        from .sim_time import MIN_PER_DAY
         unknown = [a for a in attendees if a != "agent" and a not in self.world.npcs]
         if unknown:
             return {"error": "unknown attendees: %s" % unknown}
         if duration > self.bounds["max_meeting_minutes"]:
             return {"error": "meeting too long: %d > %d min"
                     % (duration, self.bounds["max_meeting_minutes"])}
+        if task is not None:
+            t = self.world.find_task(task)
+            if t is None or t.get("filed") is False:
+                return {"error": "no task %r on the tracker to align" % task}
         self._advance_action_clock()
         # strictly future: a due-now meeting_start may never sit undispatched
         start = max(start, self.world.clock + 1)
-        meeting = self.world.add_meeting(start, start + duration, attendees,
-                                         topic, agenda)
+        end = start + duration
+        cap = self.world.scenario.get("costs", {}).get(
+            "max_meeting_minutes_per_day", 180)
+        for a in attendees:
+            for m in self.world.meetings:
+                if m.get("cancelled") or a not in m["attendees"]:
+                    continue
+                if m["start"] < end and start < m["end"]:
+                    return {"error": "%s is double-booked %s-%s"
+                            % (a, fmt(m["start"]), fmt(m["end"]))}
+            booked = sum(m["end"] - m["start"] for m in self.world.meetings
+                         if not m.get("cancelled") and a in m["attendees"]
+                         and m["start"] // MIN_PER_DAY == start // MIN_PER_DAY)
+            if booked + duration > cap:
+                return {"error": "%s would blow the daily meeting cap "
+                        "(%d/%d min)" % (a, booked + duration, cap)}
+        meeting = self.world.add_meeting(start, end, attendees, topic, agenda, task)
         for a in attendees:
             if a in self.world.npcs:
                 self.world.npcs[a].notify(
@@ -322,6 +426,30 @@ class Engine:
                   % (self.world.now(), topic, fmt(start), duration,
                      ", ".join(attendees)))
         return meeting
+
+    def agent_cancel_meeting(self, meeting_id):
+        """Clear a meeting off the calendar — frees its attendees' time and
+        voids its swarm. World-physics rule: you can only cancel a meeting that
+        HASN'T STARTED YET; a meeting in progress or already over is history."""
+        m = next((x for x in self.world.meetings if x["id"] == meeting_id), None)
+        if m is None:
+            return {"error": "no meeting %r" % meeting_id}
+        if m.get("cancelled"):
+            return {"error": "%r is already cancelled" % meeting_id}
+        self._advance_action_clock()
+        if self.world.clock >= m["start"]:
+            return {"error": "can't cancel '%s' — it already %s"
+                    % (m["topic"], "started" if self.world.clock < m["end"]
+                       else "happened")}
+        self.world.cancel_meeting(meeting_id)
+        for a in m["attendees"]:
+            if a in self.world.npcs:
+                self.world.npcs[a].notify(
+                    self.world.clock, "meeting '%s' (%s) is cancelled — that "
+                    "time is yours again" % (m["topic"], fmt(m["start"])))
+        self._say("[%s] you cancelled '%s' (%s)"
+                  % (self.world.now(), m["topic"], fmt(m["start"])))
+        return {"cancelled": meeting_id, "topic": m["topic"]}
 
     def _room_speaker_order(self, meeting):
         """Deterministic turn-offering order: least-spoken NPC attendees first.
@@ -586,6 +714,8 @@ class Engine:
         if event.kind == "meeting_start":
             m = next(x for x in self.world.meetings
                      if x["id"] == event.payload["meeting"])
+            if m.get("cancelled"):
+                return  # cancelled before it began — the room never opens
             self.world.record("meeting_started", meeting_id=m["id"], topic=m["topic"])
             self._say("[%s] (meeting '%s' starts: %s)"
                       % (self.world.now(), m["topic"], ", ".join(m["attendees"])))
@@ -594,6 +724,8 @@ class Engine:
         if event.kind == "room_turn":
             m = next(x for x in self.world.meetings
                      if x["id"] == event.payload["meeting"])
+            if m.get("cancelled"):
+                return
             if not (m["start"] <= self.world.clock < m["end"]):
                 return
             minutes = m.get("minutes", [])
@@ -610,6 +742,8 @@ class Engine:
         if event.kind == "meeting_end":
             m = next(x for x in self.world.meetings
                      if x["id"] == event.payload["meeting"])
+            if m.get("cancelled"):
+                return  # no transcript for a meeting that never happened
             minutes = m.get("minutes", [])
             if minutes:
                 # LIVE meeting: the transcript is the VERBATIM minutes —
@@ -637,11 +771,18 @@ class Engine:
         if event.kind == "belief_update":
             t = self.world.find_task(event.payload["task"])
             b = (t.get("belief") or [])[event.payload["idx"]]
+            from .tasks import belief_hours_left
             self.world.update_task(t["id"],
                                    {"belief_pct": b.get("pct"),
+                                    "belief_remaining": belief_hours_left(
+                                        b, t.get("effort_hours")),
                                     "belief_note": b.get("note", "")},
                                    "belief")
-            holder = (t.get("assignees") or [None])[0]
+            # the slip is the PINNED holder's estimate correcting (their blind
+            # spot), not whoever currently owns the task — so reassigning to a
+            # fresh owner doesn't magically move the discovery to them.
+            holder = b.get("held_by") or t.get("belief_holder") \
+                or (t.get("assignees") or [None])[0]
             npc_h = self.world.npcs.get(holder)
             if npc_h is not None:
                 npc_h.notify(self.world.clock,
@@ -656,6 +797,28 @@ class Engine:
                     self._say("[%s] %s: %s" % (self.world.now(), npc_h.name, text))
             self._say("[%s] (%s's belief about '%s' updated)"
                       % (self.world.now(), holder, t["id"]))
+            return
+
+        if event.kind == "question_ping":
+            t = self.world.find_task(event.payload["task"])
+            q = (t.get("questions") or [])[event.payload["idx"]]
+            holder = (t.get("assignees") or [None])[0]
+            npc_h = self.world.npcs.get(holder)
+            if npc_h is not None:
+                # the owner now KNOWS they're stuck (honest testimony if asked)
+                # and reaches out to the PM. The block is derived from this
+                # message's answer, not from this event — replay-safe.
+                npc_h.notify(self.world.clock,
+                             "you're blocked on '%s' — you need the PM's call "
+                             "before you can keep going, and you've flagged it"
+                             % t["title"])
+                text = self._llm(lambda: npc_h.ping(
+                    self.client, self.world,
+                    "You're blocked on '%s' and need Alex's answer to continue. "
+                    "Raise it now, in your own way: %s"
+                    % (t["title"], q.get("ping", "you need a decision from the PM"))))
+                self.world.send_message(npc_h.id, "agent", text)
+                self._say("[%s] %s: %s" % (self.world.now(), npc_h.name, text))
             return
 
         if event.kind == "npc_wakeup":

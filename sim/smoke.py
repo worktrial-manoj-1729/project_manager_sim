@@ -270,6 +270,269 @@ def check_skills(_scenario):
                   "progress exact" % (fast_dur, slow_dur))
 
 
+def _mig(scenario):
+    """A swarmable target from the scenario: the highest-effort still-open seed
+    task with a worker owner, plus a DISTINCT worker to help. Scenario-agnostic
+    so the meeting checks run on any authored instance, not just crunch."""
+    workers = {n["id"] for n in scenario.get("npcs", []) if n.get("worker", True)}
+    tasks = scenario.get("project", {}).get("tasks", [])
+    cand = sorted(
+        (t for t in tasks
+         if t.get("effort_hours", 0) - t.get("done_hours", 0) > 1
+         and (t.get("assignees") or [None])[0] in workers),
+        key=lambda t: -(t["effort_hours"] - t.get("done_hours", 0)))
+    if not cand:
+        return "migration", "sarah", "dave"   # legacy fallback
+    tid = cand[0]["id"]
+    owner = cand[0]["assignees"][0]
+    helper = next((w for w in workers if w != owner), owner)
+    return tid, owner, helper
+
+
+def _answer_open_questions(eng):
+    """Simulate a reasonable PM promptly answering every blocking question (a
+    direct agent->owner chat at each question's open-time), so a projection can
+    test an UNRELATED mechanic without a question stall confounding it."""
+    from .world import Message
+    for t in eng.world.tasks:
+        for q in t.get("questions") or []:
+            if q.get("gates"):
+                owner = (t.get("assignees") or [None])[0]
+                eng.world.messages.append(
+                    Message(len(eng.world.messages), q["at"], "agent", owner,
+                            "answered", "chat"))
+
+
+def check_meeting_swarm(scenario):
+    """A meeting LABELLED to a task, with the task's owner + a helper in the
+    room, SWARMS it: it banks work-minutes x swarm_rate at the meeting's end,
+    finishing the task (and unblocking its successor) EARLIER than no meeting.
+    Guards the full world wiring: add_meeting(task=) -> meeting_deposits ->
+    busy -> task_view. Also asserts the two anti-cheese physics:
+      - owner NOT in the room -> zero deposit (you can't swarm without the doer)
+      - progress never exceeds the task's effort (no over-deposit past 100%)."""
+    tid, owner, helper = _mig(scenario)
+    horizon = _horizon(scenario)
+
+    def project(setup):
+        eng = _engine(scenario)
+        t = eng.world.find_task(tid)
+        if t is None:
+            return None
+        _answer_open_questions(eng)   # isolate the swarm from any question stall
+        setup(eng)
+        rows = {r["id"]: r for r in eng.world.tasks_view(at=horizon)}
+        return rows
+
+    base = project(lambda e: None)
+    if base is None or tid not in base:
+        return False, "scenario has no %r task to swarm" % tid
+    succ = next((r["id"] for r in base.values()
+                 if tid in (r.get("blocked_by") or [])), None)
+
+    at = 1980  # Tue 09:00 — a full 180-min block inside working hours + cap
+    swarmed = project(lambda e: e.agent_schedule_meeting(
+        [owner, helper], at, 180, "swarm", task=tid))
+    # owner absent: same room minus the doer -> must bank nothing
+    absent = project(lambda e: e.agent_schedule_meeting(
+        [helper], at, 180, "no-doer", task=tid))
+
+    b_done, s_done = base[tid]["projected_done"], swarmed[tid]["projected_done"]
+    if not (s_done and b_done and s_done < b_done):
+        return False, ("swarm didn't speed %s (base done %s, swarm done %s)"
+                       % (tid, b_done, s_done))
+    if absent[tid]["projected_done"] != b_done:
+        return False, "owner-absent meeting still deposited work (cheese!)"
+    if swarmed[tid]["true_done_hours"] > base[tid]["effort_hours"] + 1e-6:
+        return False, "swarm over-deposited past effort (progress > 100%)"
+    gain = ""
+    if succ and base[succ]["pct"] is not None:
+        if swarmed[succ]["pct"] < base[succ]["pct"]:
+            return False, "swarm hurt the successor task"
+        gain = " (successor %s %d%%->%d%%)" % (succ, base[succ]["pct"],
+                                               swarmed[succ]["pct"])
+    return True, ("owner+helper swarm finished %s earlier (%s vs %s)%s; "
+                  "owner-absent room banked nothing"
+                  % (tid, fmt(s_done), fmt(b_done), gain))
+
+
+def check_meeting_ops(scenario):
+    """Meeting lifecycle rules the agent could try to game:
+      - a future meeting can be cancelled (frees the room, voids the swarm)
+      - a meeting already STARTED/ended cannot be cancelled (world physics)
+      - no double-booking one person into overlapping meetings
+      - the per-day meeting-minute cap is enforced."""
+    tid, owner, helper = _mig(scenario)
+    eng = _engine(scenario)
+    now = eng.world.clock
+    horizon = _horizon(scenario)
+
+    # a future swarm, then cancel it -> the task projection reverts to no-swarm
+    base = {r["id"]: r for r in eng.world.tasks_view(at=horizon)}
+    m = eng.agent_schedule_meeting([owner, helper], 1980, 180, "swarm", task=tid)
+    if "id" not in m:
+        return False, "scheduling a swarm failed: %s" % m
+    if eng.world.tasks_view(at=horizon)[0] is None:
+        return False, "tasks_view broke after scheduling"
+    cancelled = eng.agent_cancel_meeting(m["id"])
+    if "cancelled" not in cancelled:
+        return False, "future meeting refused to cancel: %s" % cancelled
+    after = {r["id"]: r for r in eng.world.tasks_view(at=horizon)}
+    if after[tid]["projected_done"] != base[tid]["projected_done"]:
+        return False, "cancel didn't void the swarm deposit"
+
+    # can't cancel a meeting that has already started
+    started = eng.agent_schedule_meeting([owner], now + 5, 60, "soon")
+    eng.advance_until(started["start"] + 1, interruptible=False)
+    r = eng.agent_cancel_meeting(started["id"])
+    if "error" not in r:
+        return False, "cancelled a meeting that had already started"
+
+    # double-booking one person into overlapping meetings is rejected
+    eng2 = _engine(scenario)
+    eng2.agent_schedule_meeting([owner], 1980, 120, "a")
+    dbl = eng2.agent_schedule_meeting([owner], 1980 + 60, 120, "b")
+    if "error" not in dbl:
+        return False, "allowed a double-booking overlap"
+
+    # daily cap: pile back-to-back same-day meetings on one person past the cap
+    eng3 = _engine(scenario)
+    cap = scenario.get("costs", {}).get("max_meeting_minutes_per_day", 180)
+    ok_min = 0
+    capped = None
+    for k in range(12):
+        r = eng3.agent_schedule_meeting([helper], 1980 + k * 60, 60, "m%d" % k)
+        if "error" in r:
+            capped = r
+            break
+        ok_min += 60
+    if capped is None:
+        return False, "daily meeting cap never fired"
+    return True, ("cancel future-only + no double-book + daily cap (%d/%d min) "
+                  "all enforced" % (ok_min, cap))
+
+
+def check_parallel_work(_scenario):
+    """Multi-assignee physics + the meet premium + a REAL tradeoff (no dominant
+    move): solo < co-assigned parallel < meeting-swarm on wall-clock; co-assign
+    is SUBLINEAR (wastes capacity to coordination); and pulling a helper onto a
+    task delays the helper's OWN task."""
+    from .tasks import compute_schedule, parallel_rate, swarm_rate
+    START = 540
+    sk = {"a": {}, "b": {}, "c": {}}
+
+    def mk(assignees, tid="T", pri="P1"):
+        return {"id": tid, "title": tid, "assignees": list(assignees),
+                "effort_hours": 6.0, "done_hours": 0, "arrival": START,
+                "source": "seed", "priority": pri, "tags": ["x"]}
+
+    def done(tasks, tid):
+        d = compute_schedule(tasks, START, {}, sk, {})[tid]["done_at"]
+        return (d - START) if d else None
+
+    solo = done([mk(["a"])], "T")
+    duo = done([mk(["a", "b"])], "T")
+    trio = done([mk(["a", "b", "c"])], "T")
+    # ladder: more hands -> sooner, but strictly diminishing (never linear)
+    if not (solo > duo > trio):
+        return False, "more hands didn't finish sooner (solo=%s duo=%s trio=%s)" % (
+            solo, duo, trio)
+    if duo <= solo / 2 + 1:
+        return False, "2 people ~halved the time — parallelism isn't damped (duo=%s)" % duo
+    # meeting beats uncoordinated parallel for the same people
+    pr = parallel_rate({"tags": ["x"]}, ["a", "b"], sk)
+    sr = swarm_rate({"tags": ["x"]}, ["a", "b"], sk)
+    if not sr > pr:
+        return False, "meeting (%.2f) not faster than parallel (%.2f)" % (sr, pr)
+    # TRADEOFF: b helping on T delays b's own task U
+    base = [mk(["a"], "T"), mk(["b"], "U")]
+    helped = [mk(["a", "b"], "T"), mk(["b"], "U")]
+    if not (done(helped, "T") < done(base, "T")
+            and done(helped, "U") > done(base, "U")):
+        return False, "no tradeoff — helping T didn't cost helper's own task U"
+    return True, ("solo %d > duo %d > trio %d min (damped); meeting %.2f>%.2f "
+                  "parallel; helping T delays helper's U (real tradeoff)"
+                  % (solo, duo, trio, sr, pr))
+
+
+def check_blocking_question(scenario):
+    """A gating question SUSPENDS its owner's task from open-time until the PM's
+    reply is DELIVERED — and the CHANNEL sets the latency: chat unblocks now,
+    email only at the next answer-batch tick. Asserts the full derived path
+    (World.question_answers from the message log -> scheduler gate):
+      - never answered  -> task frozen at its open-time progress
+      - chat answer      -> resumes immediately (most progress by Friday)
+      - email answer     -> resumes later than chat (strictly less progress)
+      - reply to the WRONG person doesn't resolve it (owner-specific)."""
+    from .world import Message
+    # locate a gating question in the scenario
+    found = None
+    for t in scenario.get("project", {}).get("tasks", []):
+        for q in t.get("questions") or []:
+            if q.get("gates"):
+                found = (t["id"], q["id"], (t.get("assignees") or [None])[0], q["at"])
+                break
+        if found:
+            break
+    if not found:
+        return False, "scenario has no gating question to test"
+    tid, qid, owner, at = found
+    horizon = _horizon(scenario)
+    batch = scenario.get("answer_batch_minutes", 120)
+
+    email_lands = (at // batch + 1) * batch   # the async cost: next grid tick
+
+    def run(reply_via, to=None):
+        eng = _engine(scenario)
+        if reply_via:
+            eng.world.messages.append(
+                Message(len(eng.world.messages), at, "agent", to or owner,
+                        "here's your call", reply_via))
+        def at_t(when, key):
+            return {x["id"]: x for x in eng.world.tasks_view(at=when)}[tid][key]
+        return {
+            "probe_status": at_t(at + 20, "status"),      # just after open
+            "mid": at_t(email_lands, "true_done_hours"),  # email's unblock instant
+            "fri": at_t(horizon, "true_done_hours"),      # end of week
+        }
+
+    never = run(None)
+    chat = run("chat")
+    email = run("email")
+    wrong = run("chat", to=helper_of(scenario, owner))
+
+    # just after the open-time: chat has already unblocked, email/never haven't
+    if not (chat["probe_status"] == "in_progress"
+            and email["probe_status"] == "blocked"
+            and never["probe_status"] == "blocked"):
+        return False, ("channel latency not modelled — probe statuses "
+                       "chat=%s email=%s never=%s"
+                       % (chat["probe_status"], email["probe_status"],
+                          never["probe_status"]))
+    # at the instant email finally lands, chat's head-start is real progress
+    if not chat["mid"] > email["mid"] + 1e-6:
+        return False, ("chat's earlier unblock bought no progress (mid chat=%.1f "
+                       "email=%.1f)" % (chat["mid"], email["mid"]))
+    # answering at all beats never (the stall is genuine lost work)
+    if not (chat["fri"] > never["fri"] + 1e-6 and email["fri"] > never["fri"] + 1e-6):
+        return False, ("stall not lost work — Fri never=%.1f email=%.1f chat=%.1f"
+                       % (never["fri"], email["fri"], chat["fri"]))
+    if abs(wrong["fri"] - never["fri"]) > 1e-6:
+        return False, "reply to the wrong person resolved the block (not owner-scoped)"
+    return True, ("chat unblocks now vs email at +%dmin (head-start %.1f>%.1f h) "
+                  "vs never-stalled (Fri +%.1f h over never)"
+                  % (email_lands - at, chat["mid"], email["mid"],
+                     chat["fri"] - never["fri"]))
+
+
+def helper_of(scenario, owner):
+    """Any worker who is NOT the question owner (for the wrong-recipient test)."""
+    for n in scenario.get("npcs", []):
+        if n.get("worker", True) and n["id"] != owner:
+            return n["id"]
+    return "nobody"
+
+
 CHECKS = [
     ("causality", check_causality),
     ("stops-at-push", check_stops_at_push),
@@ -279,6 +542,10 @@ CHECKS = [
     ("preemptive-resume", check_preemptive_resume),
     ("agent-tasks-free", check_agent_tasks_free),
     ("skills", check_skills),
+    ("meeting-swarm", check_meeting_swarm),
+    ("meeting-ops", check_meeting_ops),
+    ("parallel-work", check_parallel_work),
+    ("blocking-question", check_blocking_question),
     ("harness-drive", check_harness_drives_to_horizon),
 ]
 
