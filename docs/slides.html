@@ -321,17 +321,24 @@ the bill:
   <h2>Outcomes only — and it already separates models</h2>
   <div class="cols">
     <div>
-      <table>
-        <tr><th>metric</th><th>plain reading</th></tr>
-        <tr><td><b>completion</b></td><td>did the work get done (priority-weighted)</td></tr>
-        <tr><td><b>efficiency</b></td><td>how early finished work landed</td></tr>
-        <tr><td><b>done-rate</b></td><td>weighted fraction that shipped</td></tr>
-        <tr><td><b>fairness</b></td><td>load spread across people, or piled on one</td></tr>
-      </table>
-      <div class="ex" style="margin-top:2vh">no keyword checks · no LLM judge
-no credit for activity
-the only path to a score:
-  <b>a genuinely better week</b></div>
+      <div class="ex">COMPLETION = Σ w·(progress + α·done)/(1+α)   <span class="c">work got done</span>
+EFFICIENCY = Σ w·done·(horizon−done_at)/span  <span class="c">…and landed early</span>
+COMBINED   = (COMPL + γ·EFF)/(1+γ)            <span class="c">the reward scalar</span>
+DONE-RATE  = W(shipped)/W(all)                <span class="c">fraction shipped</span>
+FAIRNESS   = 1 − σ(hours worked/available)    <span class="c">team health</span>
+
+SCORE      = (agent − baseline)/(OPT − baseline)</div>
+      <p class="cap" style="font-size:1.9vh"><b style="color:var(--ink)">terms</b> —
+      <span class="mono">w</span>: authored priority weight (P0 8 · P1 4 · P2 2 · P3 1) ·
+      <span class="mono">progress</span>∈[0,1]: true fraction of effort done ·
+      <span class="mono">done</span>∈{0,1} ·
+      <span class="mono">α=0.5</span>: finishing bonus (a shipped task beats an almost-done one) ·
+      <span class="mono">done_at</span>: completion instant ·
+      <span class="mono">horizon</span>: Fri 17:00 · <span class="mono">span</span>: horizon − Mon start ·
+      <span class="mono">γ=0.5</span>: earliness weight ·
+      <span class="mono">σ</span>: population std over the worker pool.
+      Sums run over <b style="color:var(--ink)">authored tasks only</b> — agent-created tasks
+      carry w = 0.</p>
     </div>
     <div>
       <table>
@@ -340,9 +347,13 @@ the only path to a score:
         <tr><td>medium</td><td class="num amber">+0.41</td><td class="num green">0.97</td></tr>
         <tr><td>hard <span class="sub">(forced triage)</span></td><td class="num red">−0.26</td><td class="num amber">0.49</td></tr>
       </table>
-      <p class="cap">Capability ordering holds in all six cells; the hard tier costs even a strong
-      model half its gap. Haiku's negatives are diagnosable from its recorded trajectory:
-      constant pinging, work moved onto saturated people.</p>
+      <div class="ex" style="margin-top:2vh">no keyword checks · no LLM judge
+no credit for activity
+the only path to a score:
+  <b>a genuinely better week</b></div>
+      <p class="cap">Capability ordering holds in all six cells; hard costs even a strong model
+      half its gap. Haiku's negatives are diagnosable from its trajectory: constant pinging,
+      work moved onto saturated people.</p>
     </div>
   </div>
 </section>
