@@ -3,6 +3,10 @@
   "company": "Brightpath, a 40-person B2B SaaS startup",
   "agent_name": "Alex",
   "start_time": 545,
+  "costs": {
+    "chat_interrupt_minutes": 10,
+    "_note": "Refocus tax: work-hours the recipient loses per CHAT the PM sends (serialized; email is exempt). The knob for how much interrupting people costs — raise it to punish chatty PMs harder, set 0 to make communication free (ablation)."
+  },
   "_note": "Capacity-BINDING variant of demo.json for GRPO training: the week is over-subscribed (migration blown out to 52h so the P0 chain can't fully land even at OPT -> forced triage), and the org's fallback pickups for the questionnaire/readiness asks fire too late to finish -> a proactive PM captures ~6 points of completion the no-PM org misses. Turns the reward from a cliff into a ramp: winnable value is spread across P1 completion + efficiency + a genuine P0 sacrifice.",
   "project": {
     "id": "checkout-migration",
@@ -93,7 +97,7 @@
       },
       "fallback": {
         "npc": "dave",
-        "at": 6600
+        "at": 7000
       }
     },
     {
@@ -110,7 +114,7 @@
       },
       "fallback": {
         "npc": "dave",
-        "at": 6660
+        "at": 7000
       }
     }
   ],

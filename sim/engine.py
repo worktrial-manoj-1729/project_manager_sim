@@ -363,11 +363,27 @@ class Engine:
         existing = self.world.find_task(spec.get("id") or "")
         if existing is not None and existing.get("filed") is False:
             self._advance_action_clock()
-            self.world.update_task(existing["id"], {"filed": True}, "agent")
-            self._say("[%s] you filed ticket %s on the board"
-                      % (self.world.now(), existing["id"]))
+            changes = {"filed": True}
+            # file AND assign in one call if an assignee was given — otherwise
+            # the agent's obvious "add_task(id, assignee=dave)" would file the
+            # ticket but leave it unowned (a silent no-op on the assignment).
+            who = (spec.get("assignees") or [None])[0]
+            spec_npc = next((n for n in self.world.scenario["npcs"]
+                             if n["id"] == who), None) if who else None
+            assigned = None
+            if spec_npc is not None and spec_npc.get("worker", True):
+                changes["assignees"] = [who]
+                changes["assigned_at"] = self.world.clock
+                assigned = who
+            self.world.update_task(existing["id"], changes, "agent")
+            if assigned:
+                self.world.npcs[assigned].notify(
+                    self.world.clock, "you've been assigned: '%s'" % existing["title"])
+            self._say("[%s] you filed ticket %s on the board%s"
+                      % (self.world.now(), existing["id"],
+                         (" -> %s" % assigned) if assigned else ""))
             return {"filed": existing["id"], "title": existing["title"],
-                    "priority": existing.get("priority")}
+                    "priority": existing.get("priority"), "assigned_to": assigned}
         msg = check_task_bounds(spec, len(self.world.tasks), self.bounds)
         if msg:
             return {"error": msg}

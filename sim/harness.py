@@ -116,6 +116,28 @@ def agent_system_prompt(scenario, max_turns):
         "pass; nothing happens between your actions. Working hours are "
         "Mon-Fri 09:00-17:30. You are judged on world outcomes at Friday "
         "17:00, not on activity.\n\n"
+        "What 'well' means (a good PM's instincts, not a formula):\n"
+        "- SHIP the committed work. Higher-priority items (P0 > P1 > P2) matter "
+        "more; a finished task is worth more than one left almost-done.\n"
+        "- EARLIER IS BETTER. Landing work mid-week beats finishing at the "
+        "Friday buzzer — slack is your buffer against things going wrong, so "
+        "don't ride the deadline.\n"
+        "- The team's time is FINITE. You likely cannot get everything done; "
+        "spend scarce capacity on what matters most and be willing to let "
+        "low-value work slip.\n\n"
+        "How your tools work (the mechanics):\n"
+        "- Unowned work is INVISIBLE until you file it. When someone flags a "
+        "new ask carrying a ticket id (e.g. '(ticket: sso-incident)'), call "
+        "add_task with that exact id, THEN assign_task it to an engineer who "
+        "has spare capacity. Until you file AND assign it, nobody owns it and "
+        "it slips — doing this promptly is how new work actually gets done.\n"
+        "- Meetings are EXPENSIVE: they consume every attendee's working time "
+        "for the whole block, delaying their real work. Prefer a quick chat, "
+        "an email, or just making the call yourself; only meet if you truly "
+        "must.\n"
+        "- A chat INTERRUPTS the recipient and costs them focus time; email is "
+        "asynchronous and cheaper. Batch your questions and don't ping the "
+        "same person repeatedly — every interruption is capacity you spent.\n\n"
         "You have a budget of about {turns} decision turns for the WHOLE "
         "week — pace yourself: batch several tool calls per turn, don't "
         "micro-poll the inbox, and make sure you still have turns left for "
@@ -136,9 +158,23 @@ def run_llm(engine, max_turns, model=DEFAULT_AGENT_MODEL):
     messages = [{"role": "user", "content":
                  "It is %s. The week starts now — over to you."
                  % engine.world.now()}]
-    turns, nudges = [], 0
+    turns = []
+
+    def wake_or_finish():
+        """The agent yielded (stopped calling tools). This is a DES: we do NOT
+        advance it past future work. Roll time forward INTERRUPTIBLY — the
+        moment a push lands on the PM (a chat ping, an email batch, a line in
+        a meeting they're in) control returns and we hand them that push.
+        Returns the waking notifications, or None if the week actually ended."""
+        engine.advance_until(horizon, interruptible=True)
+        woke = engine.drain_agent_push()
+        if engine.world.clock >= horizon and not woke:
+            return None
+        return woke
 
     for turn in range(max_turns):
+        if engine.world.clock >= horizon:
+            break
         t0 = wall_now()
         try:
             response = client.messages.create(
@@ -166,18 +202,23 @@ def run_llm(engine, max_turns, model=DEFAULT_AGENT_MODEL):
 
         tool_uses = [b for b in response.content if b.type == "tool_use"]
         if not tool_uses:
-            # No tool calls this turn (end_turn text, or truncated thinking).
-            # Echo back only text/thinking — NEVER unanswered tool_use blocks.
-            nudges += 1
-            if nudges > 2 or engine.world.clock >= horizon:
+            # The agent stopped acting. It does NOT get to skip the rest of the
+            # week: roll time forward interruptibly (§ push semantics). If a
+            # push wakes the PM before Friday, hand it back and re-engage;
+            # only a truly quiet run to horizon ends here.
+            woke = wake_or_finish()
+            if woke is None:
                 break
             safe = [b for b in response.content if b.type in ("text", "thinking")]
             if safe:
                 messages.append({"role": "assistant", "content": safe})
             messages.append({"role": "user", "content":
-                             "It is %s. Continue managing via tools; when you "
-                             "are done, advance_time to the end of the week."
-                             % engine.world.now()})
+                             "It is %s — something just reached you while you "
+                             "were waiting:\n%s\nThe week is not over. Handle it "
+                             "with your tools (remember: only add_task/"
+                             "assign_task/etc. change outcomes — talking does "
+                             "not). When genuinely nothing is left, stop."
+                             % (engine.world.now(), json.dumps(woke, default=str))})
             continue
 
         messages.append({"role": "assistant", "content": response.content})

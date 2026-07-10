@@ -64,6 +64,18 @@ cp .env.example .env   # fill in ANTHROPIC_API_KEY
 .venv/bin/python -m sim.replay runs/run-XXXXXXXX-XXXXXX [until_seq]
 ```
 
+## Tests
+
+```sh
+.venv/bin/python -m unittest discover -s tests    # ~0.1s, zero LLM calls
+```
+
+Deterministic smoke tests over every rule-based component — each one pins a
+bug class that actually occurred: replay dropping message fields, retroactive
+assignment credit, priority-blind personal queues, unknown recipients
+crashing the engine, the org fallback double-firing, unfair arrivals passing
+validation, agents minting score with made-up tasks.
+
 ## Task authoring & calibration toolchain
 
 ```sh

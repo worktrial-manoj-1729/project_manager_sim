@@ -122,23 +122,25 @@ class World:
     def busy_by_assignee(self):
         """Time that doesn't go to tasks, per person — all derived, replayable:
         - meetings consume their full block for every attendee
-        - each CHAT message received in working hours costs ~20 focus-minutes
-          (refocus cost), and interruptions SERIALIZE — three pings in three
-          minutes are three full distractions, not one. Email is exempt: it
-          waits for the wakeup batch; that's its advantage.
+        - each CHAT message received in working hours costs a refocus tax
+          (`costs.chat_interrupt_minutes`, default 20 min), and interruptions
+          SERIALIZE — three pings in three minutes are three full distractions,
+          not one. Email is exempt: it waits for the wakeup batch; that's its
+          advantage. Setting the tax to 0 makes chat free (an ablation knob).
         """
         from .sim_time import in_working_hours
+        tax = self.scenario.get("costs", {}).get("chat_interrupt_minutes", 20)
         busy = {}
         for m in self.meetings:
             for a in m["attendees"]:
                 busy.setdefault(a, []).append((m["start"], m["end"]))
         last_end = {}
         for msg in self.messages:
-            if (msg.via == "chat" and msg.recipient != "agent"
+            if (msg.via == "chat" and msg.recipient != "agent" and tax
                     and in_working_hours(msg.time)):
                 start = max(msg.time, last_end.get(msg.recipient, 0))
-                busy.setdefault(msg.recipient, []).append((start, start + 20))
-                last_end[msg.recipient] = start + 20
+                busy.setdefault(msg.recipient, []).append((start, start + tax))
+                last_end[msg.recipient] = start + tax
         return busy
 
     def meetings_for(self, npc_id):
