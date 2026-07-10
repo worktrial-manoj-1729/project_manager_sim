@@ -130,6 +130,40 @@
   .k-clock_advanced, .k-beat_skipped, .k-task_rejected { background: rgba(137,135,129,.10); color: var(--ink-3); }
   @media (prefers-color-scheme: dark) { .k-task_added { color: #9085e9; } }
 
+  /* ---- THE PROBLEM (authored task-dependency graph) ---- */
+  #problem-panel summary { cursor: pointer; font-size: 12px; letter-spacing: .05em;
+    color: var(--ink-3); font-weight: 700; }
+  #problem-scroll { overflow: auto; max-height: 32vh; margin-top: 10px; }
+  #problem-canvas { position: relative; width: max-content; min-width: 100%;
+                    padding: 4px 10px 10px 4px; }
+  #problem-edges { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .prob-cols { position: relative; display: flex; gap: 64px; align-items: flex-start; }
+  .prob-col { display: flex; flex-direction: column; gap: 14px; width: 200px; flex: none; }
+  .prob-node { position: relative; border: 1.5px solid var(--baseline); border-radius: 8px;
+               padding: 7px 9px; background: var(--surface-1); font-size: 12px; }
+  .prob-node.lands { border-style: dashed; }
+  .pn-title { font-weight: 600; line-height: 1.25; }
+  .pn-meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+  .pn-prio { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
+  .pn-p0 { background: rgba(208,59,59,.16);   color: #d03b3b; }
+  .pn-p1 { background: rgba(236,131,90,.20);  color: #a34322; }
+  .pn-p2 { background: rgba(42,120,214,.12);  color: var(--c-agent); }
+  .pn-p3 { background: rgba(137,135,129,.14); color: var(--ink-2); }
+  @media (prefers-color-scheme: dark) { .pn-p1 { color: #ec835a; } }
+  .pn-eff { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .pn-owner { font-size: 10px; border: 1px solid var(--border); border-radius: 8px;
+              padding: 0 6px; color: var(--ink-2); white-space: nowrap; }
+  .pn-arr { margin-top: 4px; font-size: 10px; color: var(--ink-3);
+            font-variant-numeric: tabular-nums; }
+  .pn-arr.lands { display: inline-block; color: #8a5d00; background: rgba(237,161,0,.15);
+                  border-radius: 8px; padding: 0 6px; }
+  @media (prefers-color-scheme: dark) { .pn-arr.lands { color: var(--c-n2); } }
+  .pn-ov { margin-top: 3px; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .pn-move { color: var(--c-agent); font-weight: 600; }
+  .pn-done { color: #006300; font-weight: 700; }
+  .pn-miss { color: #d03b3b; font-weight: 700; }
+  @media (prefers-color-scheme: dark) { .pn-done { color: #0ca30c; } }
+
   /* ---- Trajectory tab ---- */
   #traj-wrap { position: relative; }
   #tooltip, #btooltip { position: absolute; display: none; pointer-events: none; z-index: 5;
@@ -268,6 +302,23 @@
   </section>
 
   <section id="tab-trajectory" class="tab">
+    <div class="panel" id="problem-panel" style="margin-bottom:14px;display:none">
+      <details id="problem-details" open>
+        <summary>THE PROBLEM — what this week throws at the PM</summary>
+        <div class="legend" style="margin:8px 0 0">
+          <span><svg width="20" height="12"><rect x="1.5" y="2" width="17" height="8" rx="2" fill="none" stroke="var(--baseline)" stroke-width="1.5"/></svg> seeded at start</span>
+          <span><svg width="20" height="12"><rect x="1.5" y="2" width="17" height="8" rx="2" fill="none" stroke="var(--baseline)" stroke-width="1.5" stroke-dasharray="3 2"/></svg> lands mid-week</span>
+          <span><svg width="26" height="12"><line x1="1" y1="6" x2="18" y2="6" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M18 2 L25 6 L18 10 z" fill="var(--ink-3)"/></svg> must finish before</span>
+          <span class="pn-move">dave → sarah</span><span style="margin-left:-12px">= PM moved it</span>
+          <span class="pn-done">✓ shipped</span>
+          <span class="pn-miss">✗ not shipped</span>
+        </div>
+        <div id="problem-scroll"><div id="problem-canvas">
+          <svg id="problem-edges"></svg>
+          <div class="prob-cols" id="problem-cols"></div>
+        </div></div>
+      </details>
+    </div>
     <div class="panel" style="margin-bottom:14px">
       <h3 id="pm-traj-head">Agent conversation</h3>
       <div id="pm-traj"></div>
@@ -749,6 +800,7 @@ async function poll() {
   if (cursor === null) scrub.value = scrub.max;
   if (grew || cursor === null) { render(); updateTasks(); }
   refreshTranscript();   // cached per run; refetches only while the run is live
+  refreshProblem();      // cached per run; fetched once, overlay re-renders
 }
 
 async function updateTasks() {
@@ -793,7 +845,7 @@ function render() {
   else { badge.textContent = "REWIND"; badge.className = "rewind";
     $("scrub-label").textContent = `event #${cursor} — ${fmt(viewClock())}`; }
   renderChat(); renderPending(); renderDocs(); renderTimeline();
-  renderPmTraj(); renderTrajectory();
+  renderPmTraj(); renderProblem(); renderTrajectory();
 }
 
 // Delivery badge: how the signal travels on each side (stamped by the
@@ -1026,6 +1078,159 @@ function renderPmTraj() {
   el.innerHTML = rows.join("") ||
     `<div style="color:var(--ink-3);font-size:13px">(no PM activity yet)</div>`;
 }
+
+/* ---------- THE PROBLEM: authored task-dependency graph ---------- */
+// GET /api/problem is the AUTHORED week — every task (seed + scheduled
+// arrivals) with dependencies, regardless of current sim time. Cached per
+// run, refetched only on run change. What the PM DID to it (reassignments,
+// completions) is overlaid from the event log the page already has —
+// horizon state, deliberately not the rewind cursor.
+const PROBLEMS = {};             // run key -> {start, due, tasks}
+let problemFetching = false;
+
+async function refreshProblem() {
+  const key = transcriptKey();
+  if (key in PROBLEMS || problemFetching) return;
+  problemFetching = true;
+  try {
+    const r = await fetch(api("/api/problem"));
+    PROBLEMS[key] = r.ok ? await r.json() : {tasks: []};
+    renderProblem();
+  } catch (e) {}                 // leave uncached -> retried next poll
+  problemFetching = false;
+}
+
+// depth = longest blocked_by chain from a root (unknown deps ignored,
+// cycles guarded); nodes with no deps sit in column 0
+function problemDepths(tasks) {
+  const byId = {};
+  tasks.forEach(t => byId[t.id] = t);
+  const depth = {};
+  const walk = (id, stack) => {
+    if (id in depth) return depth[id];
+    if (stack.has(id)) return 0;           // cycle guard: break, treat as root
+    stack.add(id);
+    const deps = ((byId[id].blocked_by) || []).filter(b => byId[b]);
+    depth[id] = deps.length ? 1 + Math.max(...deps.map(b => walk(b, stack))) : 0;
+    stack.delete(id);
+    return depth[id];
+  };
+  tasks.forEach(t => walk(t.id, new Set()));
+  return depth;
+}
+
+const PRIO_RANK = {P0: 0, P1: 1, P2: 2, P3: 3};
+const probShort = id => id ? esc(String(actorName[id] || id).split(" ")[0]) : "unowned";
+
+function renderProblem() {
+  const panel = $("problem-panel"), host = $("problem-cols");
+  if (!panel || !host) return;
+  const rec = PROBLEMS[transcriptKey()];
+  if (!rec || !Array.isArray(rec.tasks) || !rec.tasks.length) {
+    panel.style.display = "none"; host.dataset.psig = ""; return;
+  }
+  panel.style.display = "";
+
+  // ---- overlay from the FULL event log (horizon, not view()) ----
+  const known = new Set(rec.tasks.map(t => t.id));
+  const curOwner = {}, moves = {}, doneAt = {};
+  rec.tasks.forEach(t => curOwner[t.id] = t.owner || null);
+  for (const e of EVENTS) {
+    if (e.kind === "task_completed") {
+      doneAt[e.task_id] = e.completed_at != null ? e.completed_at : e.t;
+    } else if (e.kind === "task_updated" && e.source === "agent" &&
+               e.changes && Array.isArray(e.changes.assignees) && known.has(e.task_id)) {
+      const to = e.changes.assignees.length ? e.changes.assignees.join("+") : null;
+      const from = curOwner[e.task_id];
+      if (to !== from)
+        (moves[e.task_id] = moves[e.task_id] || []).push({from, to, t: e.t});
+      curOwner[e.task_id] = to;
+    }
+  }
+  const live = runIsLive();
+  const sig = transcriptKey() + ":" + rec.tasks.length + ":" + (live ? "L" : "F")
+            + ":" + JSON.stringify(moves) + ":" + JSON.stringify(doneAt);
+  if (host.dataset.psig === sig) return;   // nothing changed -> no DOM churn
+
+  // ---- layered layout: column = dependency depth ----
+  const depth = problemDepths(rec.tasks);
+  const cols = [];
+  for (const t of rec.tasks)
+    (cols[depth[t.id]] = cols[depth[t.id]] || []).push(t);
+  for (const col of cols)
+    if (col) col.sort((a, b) =>
+      (a.arrival - b.arrival) ||
+      ((PRIO_RANK[a.priority] ?? 9) - (PRIO_RANK[b.priority] ?? 9)) ||
+      (a.id < b.id ? -1 : 1));
+
+  const clip = s => { s = String(s); return s.length > 28 ? s.slice(0, 27) + "…" : s; };
+  const node = t => {
+    const seeded = t.source === "seed";
+    const p = String(t.priority || "").toUpperCase();
+    const pCls = "pn-" + (PRIO_RANK[p] != null ? p.toLowerCase() : "p3");
+    const eff = t.effort_hours == null ? "—"
+      : (t.done_hours ? `${t.done_hours}/${t.effort_hours}h` : `${t.effort_hours}h`);
+    const arr = seeded
+      ? `<div class="pn-arr">${fmt(t.arrival)}</div>`
+      : `<div class="pn-arr lands">lands ${fmt(t.arrival)} · ${t.via === "email" ? "✉" : "chat"}</div>`;
+    let ov = (moves[t.id] || []).map(m =>
+      `<div class="pn-ov pn-move">${probShort(m.from)} → ${probShort(m.to)} · ${fmt(m.t)}</div>`).join("");
+    if (t.id in doneAt) ov += `<div class="pn-ov pn-done">✓ done ${fmt(doneAt[t.id])}</div>`;
+    else if (!live)     ov += `<div class="pn-ov pn-miss">✗ not shipped</div>`;
+    return `<div class="prob-node${seeded ? "" : " lands"}" title="${escAttr(t.title)}"
+        data-prob-id="${escAttr(t.id)}"
+        data-prob-deps="${escAttr((t.blocked_by || []).filter(b => known.has(b)).join(","))}">
+      <div class="pn-title">${t.urgent ? "⚡ " : ""}${esc(clip(t.title))}</div>
+      <div class="pn-meta"><span class="pn-prio ${pCls}">${esc(p || "—")}</span>
+        <span class="pn-eff">${eff}</span>
+        <span class="pn-owner">on: ${probShort(t.owner)}</span></div>
+      ${arr}${ov}</div>`;
+  };
+  host.innerHTML = cols.map(col =>
+    `<div class="prob-col">${(col || []).map(node).join("")}</div>`).join("");
+  // if the tab is hidden the nodes can't be measured — blank the signature
+  // so the next render() (e.g. on tab activation) retries the edges
+  host.dataset.psig = drawProblemEdges() ? sig : "";
+}
+
+// SVG curves with arrowheads, drawn from measured card positions:
+// A -> B reads "A must finish before B" (B is blocked_by A)
+function drawProblemEdges() {
+  const canvas = $("problem-canvas"), svg = $("problem-edges");
+  if (!canvas || !svg) return true;
+  if (!canvas.offsetWidth) { svg.innerHTML = ""; return false; }
+  svg.setAttribute("width", canvas.offsetWidth);
+  svg.setAttribute("height", canvas.offsetHeight);
+  const cbox = canvas.getBoundingClientRect();
+  const pos = {};
+  const nodes = canvas.querySelectorAll("[data-prob-id]");
+  nodes.forEach(el => {
+    const b = el.getBoundingClientRect();
+    pos[el.dataset.probId] = {l: b.left - cbox.left, r: b.right - cbox.left,
+                              y: b.top - cbox.top + b.height / 2};
+  });
+  let paths = "";
+  nodes.forEach(el => {
+    const to = pos[el.dataset.probId];
+    for (const dep of (el.dataset.probDeps || "").split(",")) {
+      const from = pos[dep];
+      if (!dep || !from) continue;
+      const dx = Math.max(24, (to.l - from.r) / 2);
+      paths += `<path d="M ${from.r} ${from.y} C ${from.r + dx} ${from.y}, ${to.l - dx} ${to.y}, ${to.l - 4} ${to.y}"
+        fill="none" stroke="var(--ink-3)" stroke-width="1.5" opacity=".65"
+        marker-end="url(#prob-arrow)"/>`;
+    }
+  });
+  svg.innerHTML = `<defs><marker id="prob-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+      markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="var(--ink-3)"/></marker></defs>` + paths;
+  return true;
+}
+// (re)draw edges when the collapsed panel is opened — nodes exist but were
+// unmeasurable while <details> was closed
+const probDetails = $("problem-details");
+if (probDetails) probDetails.addEventListener("toggle",
+  () => { if (probDetails.open) drawProblemEdges(); });
 
 function buildLegend() {
   $("traj-legend").innerHTML = `

@@ -327,6 +327,43 @@ class Handler(BaseHTTPRequestHandler):
               and "run" not in parse_qs(url.query)):
             # hub aggregate view; ?run=<id> falls through to the per-run board
             self._json({"tasks": HUB.list_tasks()})
+        elif url.path == "/api/problem":
+            # the AUTHORED problem for a run, as graph data: every task the
+            # week will throw at the PM (seed + scheduled arrivals), with
+            # dependencies, default owners, priorities, and arrival times.
+            # Interventions/outcomes are overlaid client-side from the event
+            # log the page already has.
+            src = self._src(url.query)
+            scenario = (src.scenario if src is not None
+                        else ENGINE.world.scenario if ENGINE is not None
+                        else None)
+            if scenario is None:
+                return self._json({"tasks": []})
+            start = scenario.get("start_time", 545)
+            out = []
+            for t in (scenario.get("project") or {}).get("tasks", []):
+                out.append({"id": t["id"], "title": t["title"],
+                            "priority": t.get("priority"),
+                            "effort_hours": t.get("effort_hours"),
+                            "done_hours": t.get("done_hours", 0),
+                            "blocked_by": t.get("blocked_by", []),
+                            "owner": (t.get("assignees") or [None])[0],
+                            "urgent": bool(t.get("urgent")),
+                            "arrival": start, "source": "seed"})
+            for arr in scenario.get("task_arrivals", []):
+                t = arr["task"]
+                out.append({"id": t["id"], "title": t["title"],
+                            "priority": t.get("priority"),
+                            "effort_hours": t.get("effort_hours"),
+                            "done_hours": 0,
+                            "blocked_by": t.get("blocked_by", []),
+                            "owner": (t.get("assignees") or [None])[0],
+                            "urgent": bool(t.get("urgent")),
+                            "arrival": arr["at"], "source": "external",
+                            "via": arr.get("via", "chat")})
+            self._json({"start": start,
+                        "due": (scenario.get("project") or {}).get("due"),
+                        "tasks": out})
         elif url.path == "/api/transcript":
             # the agent's whole conversation, OpenAI chat format, untruncated
             src = self._src(url.query)
