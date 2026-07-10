@@ -39,6 +39,8 @@
   .rewind { background: rgba(237,161,0,.15); color: #8a5d00; }
   @media (prefers-color-scheme: dark) { .rewind { color: #eda100; } }
 
+  body.bench-mode #scrub-row, body.bench-mode #clock,
+  body.bench-mode #mode-badge { display: none; }
   #scrub-row { display: flex; align-items: center; gap: 12px; padding: 8px 20px;
                border-bottom: 1px solid var(--grid); font-size: 12px; color: var(--ink-2); }
   #scrub { flex: 1; accent-color: var(--c-agent); }
@@ -1207,6 +1209,11 @@ function activeTab() {
 function activateTab(tab) {
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + tab));
+  // run-time chrome (the clock + rewind scrubber) belongs to run-scoped
+  // views only — Benchmark is a cross-run analytics view where "rewinding"
+  // has no referent. The run-chips row stays: it shows live status and is
+  // still how you hop between runs from anywhere.
+  document.body.classList.toggle("bench-mode", tab === "bench");
   if (tab === "bench") renderBench(); else render();
 }
 
