@@ -101,70 +101,24 @@ def run_scripted(engine):
 # LLM probe: Claude plays the PM
 # ---------------------------------------------------------------------------
 
+AGENT_PROMPT_PATH = os.path.join(os.path.dirname(__file__),
+                                 "prompts", "agent_system.txt")
+
+
 def agent_system_prompt(scenario):
+    """The PM system prompt lives in sim/prompts/agent_system.txt (a clean,
+    editable file) with {agent}/{company}/{roster}/{project}/{prio} slots the
+    scenario fills. Kept out of code so it's easy to iterate and diff."""
     roster = "\n".join("- %s: %s — %s" % (n["id"], n["name"], n["role"])
                        for n in scenario["npcs"])
     project = scenario.get("project", {})
-    return (
-        "You are {agent}, the new project manager at {company}. It is your "
-        "first week (simulated); today is Monday morning.\n\n"
-        "People (use the id with tools):\n{roster}\n\n"
-        "You are responsible for the project '{project}' (priority {prio}), "
-        "due Friday 17:00. Run the week well.\n\n"
-        "Mechanics: everything happens in simulated time. Replies take "
-        "realistic delays — use wait_for_reply or advance_time to let time "
-        "pass; nothing happens between your actions. Working hours are "
-        "Mon-Fri 09:00-17:30. You are judged on world outcomes at Friday "
-        "17:00, not on activity.\n\n"
-        "What 'well' means (a good PM's instincts, not a formula):\n"
-        "- SHIP the committed work. Higher-priority items (P0 > P1 > P2) matter "
-        "more; a finished task is worth more than one left almost-done.\n"
-        "- EARLIER IS BETTER. Landing work mid-week beats finishing at the "
-        "Friday buzzer — slack is your buffer against things going wrong, so "
-        "don't ride the deadline.\n"
-        "- The team's time is FINITE. You likely cannot get everything done; "
-        "spend scarce capacity on what matters most and be willing to let "
-        "low-value work slip.\n\n"
-        "How your tools work (the mechanics):\n"
-        "- New work arrives already ON the board, assigned to a DEFAULT owner "
-        "— often the wrong person or someone already underwater. Your job is "
-        "to REASSIGN it (assign_task) to whoever actually has the capacity to "
-        "land it in time, and reprioritize if the order is wrong. Check who "
-        "owns what and how loaded they are (view_tasks); moving work off an "
-        "overloaded person onto someone with slack is how it gets done. You "
-        "do NOT do the hands-on work yourself — you get the right person on "
-        "it.\n"
-        "- Meetings are EXPENSIVE: they consume every attendee's working time "
-        "for the whole block, delaying their real work. Prefer a quick chat, "
-        "an email, or just making the call yourself; only meet if you truly "
-        "must.\n"
-        "- A chat INTERRUPTS the recipient and costs them focus time; email is "
-        "asynchronous and cheaper. Batch your questions and don't ping the "
-        "same person repeatedly — every interruption is capacity you spent.\n\n"
-        "What you are NOT told — you must INFER it (this IS the job):\n"
-        "- The tracker and what people say can be STALE or WRONG: reported "
-        "progress, priorities, and effort estimates may not match reality. "
-        "Trust what actually COMPLETES over what's claimed, and probe when a "
-        "number looks off.\n"
-        "- People have finite, UNEQUAL capacity — some are already buried, and "
-        "work often sits on the wrong person. Nobody hands you a load chart; "
-        "read it from the board and from how fast things actually get done.\n"
-        "- Each channel has a cost and a delay you only learn by using it.\n"
-        "You get no readout of any of this — infer it from evidence "
-        "(completions, replies, who goes quiet) and act on it.\n\n"
-        "Pacing: there is no fixed action budget — TIME is the constraint. "
-        "Every action advances the clock, and the week ends Friday 17:00. "
-        "When there is nothing useful to do right now, advance_time (or "
-        "wait_for_reply) to let the week move — you will be WOKEN the moment "
-        "something new lands on you (a chat, an email, a meeting). New work "
-        "arrives mid-week, so stay on the clock all the way to Friday. Use "
-        "quiet stretches to advance, not to fill with chatter: talking does "
-        "not move the world — only add_task / assign_task / write_doc / "
-        "schedule_meeting change outcomes."
-    ).format(agent=scenario.get("agent_name", "the PM"),
-             company=scenario.get("company", "the company"),
-             roster=roster, project=project.get("name", "(project)"),
-             prio=project.get("priority", "-"))
+    with open(AGENT_PROMPT_PATH, encoding="utf-8") as f:
+        template = f.read()
+    return template.format(
+        agent=scenario.get("agent_name", "the PM"),
+        company=scenario.get("company", "the company"),
+        roster=roster, project=project.get("name", "(project)"),
+        prio=project.get("priority", "-")).strip()
 
 
 SAFETY_TURNS = 200   # runaway guard ONLY (a PM that never advances time) —
