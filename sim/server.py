@@ -83,6 +83,84 @@ def load_transcript(run_dir):
     return out
 
 
+# ---- LLM post-mortem (observability ONLY — never touches the score) --------
+# Explicit model-based analysis, run as HEADLESS CLAUDE CODE (`claude -p`)
+# from the repo root with read-only tools: the analyst can open the run's
+# actual files AND the sim/ physics code, so its claims are grounded in this
+# codebase rather than a paraphrase we feed it. Output is cached to
+# <run>/analysis.json. The reward pipeline (eval/replay) never sees it.
+ANALYSIS_LOCK = threading.Lock()
+
+_ANALYSIS_PROMPT = """\
+You are analyzing one recorded run of the PM simulation in this repo.
+Run directory: {run}
+
+An AI agent played project manager for one simulated work week; simulated
+coworkers do the work. The PM's levers: chat/email/meetings, reassigning
+tasks, reordering queues, answering blocking questions. Score 0 = the
+unmanaged week (baseline), 1 = the best frictionless solo plan (>1 =
+collaboration beat it).
+
+Read, in this order:
+1. {run}/scorecard.json   — the final grades (score, per-task outcomes)
+2. {run}/scenario.json    — the authored week (tasks, arrivals, beliefs, band)
+3. {run}/events.jsonl     — the trajectory. BE EFFICIENT: this file can run
+   thousands of lines; do NOT read it exhaustively. Grep for the decisions
+   ("task_updated", "meeting_scheduled", '"kind": "message".*"sender": "agent"'),
+   then targeted Reads around what the scorecard says failed. Skip kinds
+   scheduled / clock_advanced / npc_wakeup (scheduler noise).
+Consult sim/*.py only if you need a physics rule confirmed (e.g. how swarm
+deposits or the focus tax work). Do not modify anything. Budget yourself:
+under ~15 tool calls, then write.
+
+Then output ONLY this markdown, no preamble:
+## What went well
+## What went badly
+## Biggest missed lever
+## Verdict
+
+Bullets citing sim-times and task ids. Times: `t` is minutes from Monday
+00:00 — cite them humanized, e.g. t=597 -> "Mon 09:57", t=1980 -> "Tue 09:00"
+(working day 09:00-17:00). "Biggest missed lever" = ONE concrete action and
+when it should have happened. Verdict = one sentence. Max ~350 words. Judge
+outcomes, not style — busywork that moved no task is a negative.
+This is observability commentary; it never affects the score."""
+
+
+def generate_analysis(run_dir, refresh=False):
+    path = os.path.join(run_dir, "analysis.json")
+    if os.path.exists(path) and not refresh:
+        with open(path) as f:
+            return json.load(f)
+    if not os.path.exists(os.path.join(run_dir, "scorecard.json")):
+        return {"error": "run has no scorecard yet — analysis reads the final grades"}
+    import shutil
+    import subprocess
+    claude = shutil.which("claude")
+    if not claude:
+        return {"error": "`claude` CLI not on PATH — headless analysis needs Claude Code"}
+    cmd = [claude, "-p", _ANALYSIS_PROMPT.format(run=run_dir),
+           "--allowedTools", "Read,Glob,Grep", "--output-format", "text"]
+    if os.environ.get("PM_SIM_ANALYSIS_MODEL"):
+        cmd += ["--model", os.environ["PM_SIM_ANALYSIS_MODEL"]]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return {"error": "headless analysis timed out (10 min)"}
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return {"error": "claude -p failed: %s" % (proc.stderr or "no output")[-400:]}
+    with open(os.path.join(run_dir, "scorecard.json")) as f:
+        score = json.load(f).get("score")
+    out = {"text": proc.stdout.strip(),
+           "model": "claude-code headless" +
+                    (" (%s)" % os.environ["PM_SIM_ANALYSIS_MODEL"]
+                     if os.environ.get("PM_SIM_ANALYSIS_MODEL") else ""),
+           "analyzed_score": score, "run": os.path.basename(run_dir)}
+    with open(path, "w") as f:
+        json.dump(out, f, indent=1)
+    return out
+
+
 class RunHub:
     """One dashboard, every run: lists runs/ with labels (agent model, live
     status, score, cost) and serves any of them read-only via ?run=<id>."""
@@ -396,8 +474,14 @@ class Handler(BaseHTTPRequestHandler):
             from .sim_time import working_minutes_between
             due = (scenario.get("project") or {}).get("due")
             workers = worker_ids(scenario)
+            # the team, WITH hidden skill multipliers — ground truth for the
+            # researcher's problem view (the PM never sees these numbers)
+            people = [{"id": n["id"], "name": n["name"], "role": n["role"],
+                       "worker": n["id"] in workers,
+                       "skills": n.get("skills") or {}}
+                      for n in scenario.get("npcs", [])]
             self._json({"start": start, "due": due, "tasks": out,
-                        "workers": len(workers),
+                        "workers": len(workers), "people": people,
                         "capacity_hours": (round(len(workers) *
                             working_minutes_between(start, due) / 60.0, 1)
                             if due else None)})
@@ -407,6 +491,17 @@ class Handler(BaseHTTPRequestHandler):
             run_dir = (src.run_dir if src is not None
                        else ENGINE.run_dir if ENGINE is not None else None)
             self._json({"messages": load_transcript(run_dir)})
+        elif url.path == "/api/analysis":
+            # CACHED post-mortem only — generation is the POST (explicit,
+            # it costs an LLM call). {"text": null} = not analyzed yet.
+            src = self._src(url.query)
+            run_dir = (src.run_dir if src is not None
+                       else ENGINE.run_dir if ENGINE is not None else None)
+            path = os.path.join(run_dir or "", "analysis.json")
+            if run_dir and os.path.exists(path):
+                with open(path) as f:
+                    return self._json(json.load(f))
+            self._json({"text": None})
         elif url.path == "/api/meta":
             src = self._src(url.query)
             if src is not None:
@@ -456,11 +551,23 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
+        url = urlparse(self.path)
+        if url.path == "/api/analysis":
+            # allowed in watch/hub mode: writes only the derived commentary
+            # side-file (analysis.json), never the run's recorded state
+            src = self._src(url.query)
+            run_dir = (src.run_dir if src is not None
+                       else ENGINE.run_dir if ENGINE is not None else None)
+            if not run_dir:
+                return self._json({"error": "no run"}, 404)
+            refresh = "refresh" in parse_qs(url.query)
+            with ANALYSIS_LOCK:  # one generation at a time; rest hit the cache
+                out = generate_analysis(run_dir, refresh=refresh)
+            return self._json(out, 400 if "error" in out else 200)
         if WATCHER is not None or HUB is not None:
             return self._json({"error": "watch/hub mode is read-only"}, 403)
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length) or b"{}")
-        url = urlparse(self.path)
 
         if url.path == "/api/say":
             npc, text = body.get("npc"), (body.get("text") or "").strip()
