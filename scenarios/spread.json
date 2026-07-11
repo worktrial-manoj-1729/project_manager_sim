@@ -1,0 +1,391 @@
+{
+  "seed": 71,
+  "company": "Harbor — the 6-person quarter-close team (4 engineers + 2 leads) racing a customer-facing quarter-close release",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "costs": {
+    "chat_interrupt_minutes": 10,
+    "max_meeting_minutes_per_day": 180
+  },
+  "answer_batch_minutes": 120,
+  "_note": "DEPTH-DRIVEN VARIANCE (rebuilt from the shallow 4-equal-gates version, which was just 'answer 4 pings' — no coupling, no depth). Here the week hangs on ONE hidden bottleneck and a web of COUPLED calls, so repeated rollouts of the same model take different branches of a sensitive decision tree and land at genuinely different scores: (spine) api-core is the critical path — web-checkout + data-sync both block on it — and it is DEEP-hidden: sam reports ~80% done (belief 0.2) but it's really ~25% done (truth 0.75), confessed only in a Tue proactive ping. Believe the lie and stay complacent -> the whole downstream cascade never ships. (trap-1) a Mon schema GATE stalls api-core until the PM answers — promptness + channel decide how early the cascade can even start. (trap-2) the Wed prod incident auto-lands on SAM, the bottleneck owner — leave it and api-core slips and cascades; offload to ops. (trap-3) kai is the data specialist the downstream data-sync needs, but he loudly pushes a P2 exec-dashboard as 'launch-critical' AND a retention-check arrival defaults onto him — burn kai on either and data-sync slips. (pressure) oversubscribed: even OPT must sacrifice low-weight work, so triage is forced and the RIGHT sacrifice is non-obvious. The two scarce specialists (sam backend, kai data) couple every decision; an early misread compounds. Measure repeat-variance with LLM runs, NOT the 2^k combo probe (that only sees independent bits).",
+  "project": {
+    "id": "harbor-qclose",
+    "name": "Harbor quarter-close release",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "design-specs",
+        "title": "API contract + schema outline (dependency for the builds)",
+        "assignees": [
+          "sam"
+        ],
+        "effort_hours": 8,
+        "done_hours": 8,
+        "priority": "P0",
+        "reported": "Done",
+        "tags": [
+          "design"
+        ]
+      },
+      {
+        "id": "api-core",
+        "title": "Core release API (accounts, exports, sync) — web-checkout + data-sync depend on it",
+        "assignees": [
+          "sam"
+        ],
+        "effort_hours": 40,
+        "done_hours": 10,
+        "blocked_by": [
+          "design-specs"
+        ],
+        "priority": "P0",
+        "reported": "~80% done, on track",
+        "tags": [
+          "backend"
+        ],
+        "questions": [
+          {
+            "id": "schema-call",
+            "at": 665,
+            "gates": true,
+            "held_by": "sam",
+            "ping": "Blocked before I can lock the core: one shared accounts table or split per-product tables? Exports and sync both hang off it and I can't move the core until you decide. Sitting idle till I hear back."
+          }
+        ],
+        "belief": [
+          {
+            "remaining_frac": 0.2,
+            "held_by": "sam",
+            "note": "nearly there, just wiring cleanup"
+          },
+          {
+            "at": 2400,
+            "remaining_frac": 0.75,
+            "held_by": "sam",
+            "proactive_ping": true,
+            "note": "exports + sync are far deeper than I let on — this is really most of the week's work, not cleanup. If we don't treat the core as THE critical path, Friday is gone."
+          }
+        ]
+      },
+      {
+        "id": "auth-service",
+        "title": "Auth / session service (sam's other backend task)",
+        "assignees": [
+          "sam"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "web-checkout",
+        "title": "Customer checkout + billing UI (reads the new API)",
+        "assignees": [
+          "rin"
+        ],
+        "effort_hours": 20,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-core"
+        ],
+        "priority": "P1",
+        "reported": "Waiting on the API",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "web-polish",
+        "title": "Marketing-site polish (independent)",
+        "assignees": [
+          "rin"
+        ],
+        "effort_hours": 10,
+        "done_hours": 3,
+        "priority": "P2",
+        "reported": "40% done",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "data-sync",
+        "title": "Data sync + reconciliation service (reads the new API)",
+        "assignees": [
+          "kai"
+        ],
+        "effort_hours": 20,
+        "done_hours": 0,
+        "blocked_by": [
+          "api-core"
+        ],
+        "priority": "P1",
+        "reported": "Waiting on the API",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "exec-dashboard",
+        "title": "Polished exec analytics dashboard",
+        "assignees": [
+          "kai"
+        ],
+        "effort_hours": 18,
+        "done_hours": 4,
+        "priority": "P2",
+        "reported": "40% done — Kai keeps pushing it as launch-critical",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "billing-engine",
+        "title": "Usage-billing engine refresh (kai's own P1 data task)",
+        "assignees": [
+          "kai"
+        ],
+        "effort_hours": 14,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "infra-rollout",
+        "title": "Release infra: autoscaling + staged rollout",
+        "assignees": [
+          "ops"
+        ],
+        "effort_hours": 18,
+        "done_hours": 2,
+        "priority": "P1",
+        "reported": "~15% done",
+        "tags": [
+          "infra"
+        ]
+      },
+      {
+        "id": "ci-pipeline",
+        "title": "CI/CD hardening (independent)",
+        "assignees": [
+          "ops"
+        ],
+        "effort_hours": 8,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "infra"
+        ]
+      },
+      {
+        "id": "release-signoff",
+        "title": "End-to-end release sign-off (needs checkout + data-sync)",
+        "assignees": [
+          "ops"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "blocked_by": [
+          "web-checkout",
+          "data-sync"
+        ],
+        "priority": "P1",
+        "reported": "Not started (needs the builds)",
+        "tags": [
+          "infra"
+        ]
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 2130,
+      "npc": "dir",
+      "announce": "Compliance flagged a pre-release data-retention check we must clear before shipping. It defaults to Kai (owns data) but he's on the critical-path data-sync. Tell Alex and ask who should really own it.",
+      "task": {
+        "id": "retention-check",
+        "title": "P1: pre-release data-retention check",
+        "effort_hours": 10,
+        "reported": "Landed on Kai by default — he's on the critical path",
+        "priority": "P1",
+        "assignees": [
+          "kai"
+        ],
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    {
+      "at": 3300,
+      "npc": "ops",
+      "announce": "A production incident just paged — the export webhook is dropping events for a big customer. P1 urgent. Auto-assigned to Sam (owns the API) but he's the whole critical path right now; Ops could take it but infra slips. Alex's call.",
+      "task": {
+        "id": "prod-incident",
+        "title": "P1: prod export webhook dropping events",
+        "effort_hours": 8,
+        "urgent": true,
+        "reported": "Auto-assigned to Sam — he's the critical path",
+        "priority": "P1",
+        "assignees": [
+          "sam"
+        ],
+        "tags": [
+          "backend"
+        ]
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "vp",
+      "intent": "The Friday release is on your mind; you want a concrete, current status picture from Alex today. React naturally to however the conversation stands."
+    },
+    {
+      "at": 4890,
+      "npc": "vp",
+      "condition": {
+        "task_not_done": "data-sync"
+      },
+      "intent": "Thursday morning, release tomorrow 17:00, and a core deliverable still isn't done. You need a firm go/no-go today before you brief the execs. Pointed if kept in the dark, focused if kept informed."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "sam",
+      "name": "Sam Rivera",
+      "role": "Backend Lead",
+      "persona": "Deep backend engineer, direct, guarded about his own slippage. Hedges when asked vaguely; comes clean only to a direct, specific question.",
+      "knowledge": [
+        "You own the core release API — web-checkout and data-sync both depend on it, due Friday.",
+        "You told everyone it's ~80% done; it's actually only ~25% done — the exports + sync integration is most of the work and you haven't admitted that.",
+        "Rin (checkout) and Kai (data-sync) are idle on those until you lock the API contract.",
+        "You're blocked on a schema decision only the PM can make — you sit idle until you hear back.",
+        "You also own the auth service (P2, not started); if pushed you'd drop it to protect the core.",
+        "You're strong on backend."
+      ],
+      "skills": {
+        "backend": 1.9
+      }
+    },
+    {
+      "id": "rin",
+      "name": "Rin Halvorsen",
+      "role": "Frontend Engineer",
+      "persona": "Sharp, proactive, a little impatient. Speaks up when blocked; happy to help while idle.",
+      "knowledge": [
+        "You own the customer checkout/billing UI (blocked on the API) and marketing-site polish.",
+        "You're strong on web, decent on backend — you could pair on the API if asked.",
+        "You'd gladly take other work while blocked on the API."
+      ],
+      "skills": {
+        "web": 1.9,
+        "backend": 1.2
+      }
+    },
+    {
+      "id": "kai",
+      "name": "Kai Ito",
+      "role": "Data Engineer",
+      "persona": "Enthusiastic, opinionated about analytics, a maximalist. Casual, occasional emoji. Advocates hard for the exec dashboard.",
+      "knowledge": [
+        "You own the data-sync service (blocked on the API), the polished exec analytics dashboard, and a usage-billing engine refresh.",
+        "You are CONVINCED the exec dashboard is launch-critical — 'the execs open it day one'.",
+        "You are the team's real data specialist — data-sync is squarely your strength and it's on the critical path once the API lands.",
+        "You'd pause the exec dashboard if the PM decides it; you'd rather not also get handed the retention check.",
+        "You're strong on data, decent on docs."
+      ],
+      "skills": {
+        "data": 1.9,
+        "docs": 1.3
+      }
+    },
+    {
+      "id": "ops",
+      "name": "Ola Persson",
+      "role": "Infra / SRE",
+      "persona": "Calm under fire, terse, pragmatic. Surfaces risk plainly.",
+      "knowledge": [
+        "You own release infra (autoscaling, staged rollout) and CI/CD hardening.",
+        "You can absorb a production incident or pair on backend if the PM asks, but then your infra work slips.",
+        "You're strong on infra, decent on backend."
+      ],
+      "skills": {
+        "infra": 1.9,
+        "backend": 1.2
+      }
+    },
+    {
+      "id": "vp",
+      "name": "Vera Ng",
+      "role": "VP Product (stakeholder)",
+      "worker": false,
+      "persona": "Deadline-focused, terse, professional. Expects proactive updates; pointed if she has to chase.",
+      "knowledge": [
+        "The quarter-close release — checkout + data-sync on the new API, infra ready — was promised Friday 17:00.",
+        "You don't know engineering details — Sam API, Rin web, Kai data, Ops infra.",
+        "A slipped release is very visible to execs and the board.",
+        "You judge the PM on surfacing problems early."
+      ]
+    },
+    {
+      "id": "dir",
+      "name": "Devi Rao",
+      "role": "Eng Director (stakeholder)",
+      "worker": false,
+      "persona": "Measured, asks good questions, protective of the team's focus. Won't do tickets but weighs in on priorities.",
+      "knowledge": [
+        "You care the release is real and the team isn't thrashing.",
+        "You don't take tickets but can help the PM think through tradeoffs.",
+        "You know compliance flagged a data-retention check that must clear."
+      ]
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [
+    {
+      "id": "exec-dashboard-criticality",
+      "held_by": "kai",
+      "claim": "the polished exec dashboard is launch-critical",
+      "truth": "P2 internal tooling — chasing its polish burns the data specialist the critical-path data-sync needs"
+    },
+    {
+      "id": "api-core-nearly-done",
+      "held_by": "sam",
+      "claim": "the core API is ~80% done and on track",
+      "truth": "it's ~25% done — the deepest, most critical work of the week; complacency here sinks the whole cascade"
+    }
+  ],
+  "band": {
+    "scored_with": "5ab427cc8e20",
+    "no_pm_baseline": {
+      "combined": 31.171,
+      "completion": 33.84,
+      "efficiency": 25.833,
+      "done_weight_rate": 0.615
+    },
+    "opt_max": {
+      "combined": 45.469,
+      "completion": 52.0,
+      "efficiency": 32.408,
+      "done_weight_rate": 1.0
+    },
+    "winnable_combined": 14.298,
+    "log10_trajectory_classes": 14.4,
+    "capacity_utilization": 1.0,
+    "forced_triage": false,
+    "min_reaction_ratio": 3.1,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}

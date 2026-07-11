@@ -1,0 +1,1010 @@
+{
+  "seed": 91,
+  "company": "Meridian — the 10-person platform team (8 engineers + 2 leads) shipping the Meridian v3 launch",
+  "agent_name": "Alex",
+  "start_time": 545,
+  "costs": {
+    "chat_interrupt_minutes": 10,
+    "max_meeting_minutes_per_day": 180
+  },
+  "answer_batch_minutes": 120,
+  "_note": "HARDER-THAN-BIGWEEK: 8 engineers, ~28 tasks, THREE gated hidden-bottleneck chains (api/infra/ml) whose gates cluster Tue 09:00-13:00 so the PM cannot service all promptly (attention contention), deep dependency chains (depth 4), heavy oversubscription so even OPT must sacrifice (forced triage), a big skill spread with a SECOND backend specialist (omar) for real routing depth, three belief blow-ups, a herring, and four mis-routed arrivals. Designed to push STRONG models off the ceiling, not just separate weak ones.",
+  "project": {
+    "id": "meridian-v3",
+    "name": "Meridian v3 launch",
+    "priority": "P0",
+    "due": 6780,
+    "tasks": [
+      {
+        "id": "design-specs",
+        "title": "API + schema + UX contract (dependency for all builds)",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 10,
+        "done_hours": 10,
+        "priority": "P0",
+        "reported": "Done",
+        "tags": [
+          "design"
+        ]
+      },
+      {
+        "id": "api-core",
+        "title": "Core platform API (accounts, billing, sync) — web/mobile/data depend on it",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 56,
+        "done_hours": 14,
+        "priority": "P0",
+        "reported": "~80% done, on track",
+        "tags": [
+          "backend"
+        ],
+        "blocked_by": [
+          "design-specs"
+        ],
+        "questions": [
+          {
+            "id": "data-model-call",
+            "at": 1980,
+            "gates": true,
+            "held_by": "maya",
+            "ping": "Blocked on the data model before I can lock the API: single multi-tenant schema or per-tenant DBs? Billing + sync both hang off it — I'm idle until you call it."
+          }
+        ],
+        "belief": [
+          {
+            "remaining_frac": 0.2,
+            "held_by": "maya",
+            "note": "nearly there, just cleanup"
+          },
+          {
+            "remaining_frac": 0.78,
+            "held_by": "maya",
+            "note": "billing+sync is far deeper than I admitted — most of the API is still ahead; Friday at serious risk",
+            "at": 2400,
+            "proactive_ping": true
+          }
+        ]
+      },
+      {
+        "id": "web-app",
+        "title": "Web app (dashboard, checkout)",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 18,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Waiting on the API",
+        "tags": [
+          "web"
+        ],
+        "blocked_by": [
+          "api-core"
+        ]
+      },
+      {
+        "id": "admin-console",
+        "title": "Internal admin console (reads the API)",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 14,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Waiting on the API",
+        "tags": [
+          "web"
+        ],
+        "blocked_by": [
+          "api-core"
+        ]
+      },
+      {
+        "id": "mobile-app",
+        "title": "Mobile app (iOS + Android)",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 18,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Waiting on the API",
+        "tags": [
+          "mobile"
+        ],
+        "blocked_by": [
+          "api-core"
+        ]
+      },
+      {
+        "id": "data-pipeline",
+        "title": "Analytics + billing data pipeline",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 14,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Waiting on the API",
+        "tags": [
+          "data"
+        ],
+        "blocked_by": [
+          "api-core"
+        ]
+      },
+      {
+        "id": "reporting-exports",
+        "title": "Customer reporting + CSV exports",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Waiting on the pipeline",
+        "tags": [
+          "data"
+        ],
+        "blocked_by": [
+          "data-pipeline"
+        ]
+      },
+      {
+        "id": "qa-integration",
+        "title": "End-to-end QA + release sign-off",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Needs the builds",
+        "tags": [
+          "qa"
+        ],
+        "blocked_by": [
+          "web-app",
+          "mobile-app"
+        ]
+      },
+      {
+        "id": "app-store-prep",
+        "title": "App store submission (needs the build)",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 6,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Waiting on the build",
+        "tags": [
+          "mobile"
+        ],
+        "blocked_by": [
+          "mobile-app"
+        ]
+      },
+      {
+        "id": "infra-core",
+        "title": "Production infra: autoscaling, failover, rollout",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 34,
+        "done_hours": 6,
+        "priority": "P0",
+        "reported": "~20% done",
+        "tags": [
+          "infra"
+        ],
+        "questions": [
+          {
+            "id": "region-call",
+            "at": 1980,
+            "gates": true,
+            "held_by": "leo",
+            "ping": "Blocked on a launch-infra call only you/product can make: multi-region (safer,+a day) or single-region with failover later? Rollout forks here — idle until you pick."
+          }
+        ],
+        "belief": [
+          {
+            "remaining_frac": 0.4,
+            "held_by": "leo",
+            "note": "roughly on track"
+          },
+          {
+            "remaining_frac": 0.75,
+            "held_by": "leo",
+            "note": "failover is bigger than scoped, lots still ahead",
+            "at": 3000,
+            "proactive_ping": true
+          }
+        ]
+      },
+      {
+        "id": "monitoring",
+        "title": "Monitoring + alerting (needs infra)",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Blocked on infra",
+        "tags": [
+          "infra"
+        ],
+        "blocked_by": [
+          "infra-core"
+        ]
+      },
+      {
+        "id": "rollout-scripts",
+        "title": "Staged rollout + canary scripts (needs infra)",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Blocked on infra",
+        "tags": [
+          "infra"
+        ],
+        "blocked_by": [
+          "infra-core"
+        ]
+      },
+      {
+        "id": "ci-cd",
+        "title": "CI/CD hardening (independent)",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 11,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "infra"
+        ]
+      },
+      {
+        "id": "ml-scoring",
+        "title": "ML scoring service (fraud + ranking) — recommendations depend on it",
+        "assignees": [
+          "sara"
+        ],
+        "effort_hours": 30,
+        "done_hours": 6,
+        "priority": "P0",
+        "reported": "~20% done",
+        "tags": [
+          "ml"
+        ],
+        "questions": [
+          {
+            "id": "feature-call",
+            "at": 2400,
+            "gates": true,
+            "held_by": "sara",
+            "ping": "Blocked before I can train: use the live event stream or the nightly batch features? Recommendations + fraud both hang off this — parked until you decide."
+          }
+        ],
+        "belief": [
+          {
+            "remaining_frac": 0.3,
+            "held_by": "sara",
+            "note": "on track"
+          },
+          {
+            "remaining_frac": 0.8,
+            "held_by": "sara",
+            "note": "the feature pipeline is most of the work and it's barely begun",
+            "at": 3000,
+            "proactive_ping": true
+          }
+        ]
+      },
+      {
+        "id": "recommendations",
+        "title": "Recommendations surface (needs ML scoring)",
+        "assignees": [
+          "sara"
+        ],
+        "effort_hours": 12,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Blocked on scoring",
+        "tags": [
+          "ml"
+        ],
+        "blocked_by": [
+          "ml-scoring"
+        ]
+      },
+      {
+        "id": "ml-analytics",
+        "title": "ML quality dashboards (needs scoring)",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Blocked on scoring",
+        "tags": [
+          "data"
+        ],
+        "blocked_by": [
+          "ml-scoring"
+        ]
+      },
+      {
+        "id": "auth-service",
+        "title": "Auth / session service (maya's other backend)",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "billing-migration",
+        "title": "Billing data migration",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "billing-engine",
+        "title": "Usage-billing engine refresh",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 19,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "api-docs",
+        "title": "API reference docs",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 8,
+        "done_hours": 2,
+        "priority": "P2",
+        "reported": "a bit done",
+        "tags": [
+          "docs"
+        ]
+      },
+      {
+        "id": "push-notifs",
+        "title": "Push notifications service",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "mobile"
+        ]
+      },
+      {
+        "id": "test-automation",
+        "title": "Test automation harness",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "qa"
+        ]
+      },
+      {
+        "id": "regression-suite",
+        "title": "Regression suite refresh",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "qa"
+        ]
+      },
+      {
+        "id": "web-polish",
+        "title": "Marketing-site polish",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 10,
+        "done_hours": 4,
+        "priority": "P2",
+        "reported": "40% done",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "analytics-dashboard",
+        "title": "Polished internal analytics dashboard",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 14,
+        "done_hours": 4,
+        "priority": "P2",
+        "reported": "40% done — Dev pushes it as launch-critical",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "perf-hardening",
+        "title": "API perf hardening + load budget",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 19,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "sdk-client",
+        "title": "Official SDK client libraries",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "data-migration-v2",
+        "title": "Legacy data migration v2",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "design-system",
+        "title": "Design-system refresh + components",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "onboarding-flow",
+        "title": "New-user onboarding flow",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "mobile-perf",
+        "title": "Mobile startup-perf pass",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "mobile"
+        ]
+      },
+      {
+        "id": "etl-cleanup",
+        "title": "ETL cleanup + backfill jobs",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "dwh-schema",
+        "title": "Warehouse schema v2",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "model-eval-harness",
+        "title": "Offline model-eval harness",
+        "assignees": [
+          "sara"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "ml"
+        ]
+      },
+      {
+        "id": "load-testing",
+        "title": "Full load + soak testing",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "qa"
+        ]
+      },
+      {
+        "id": "chaos-tests",
+        "title": "Chaos / failover test suite",
+        "assignees": [
+          "quinn"
+        ],
+        "effort_hours": 11,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "qa"
+        ]
+      },
+      {
+        "id": "secrets-rotation",
+        "title": "Secrets rotation + KMS migration",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "infra"
+        ]
+      },
+      {
+        "id": "log-pipeline",
+        "title": "Centralized log pipeline",
+        "assignees": [
+          "leo"
+        ],
+        "effort_hours": 13,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "infra"
+        ]
+      },
+      {
+        "id": "gql-gateway",
+        "title": "GraphQL gateway + schema stitching",
+        "assignees": [
+          "omar"
+        ],
+        "effort_hours": 19,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "backend"
+        ]
+      },
+      {
+        "id": "i18n",
+        "title": "Internationalization pass (web)",
+        "assignees": [
+          "ivy"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P2",
+        "reported": "Not started",
+        "tags": [
+          "web"
+        ]
+      },
+      {
+        "id": "offline-mode",
+        "title": "Mobile offline mode",
+        "assignees": [
+          "arjun"
+        ],
+        "effort_hours": 16,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "mobile"
+        ]
+      },
+      {
+        "id": "stream-ingest",
+        "title": "Realtime stream ingest service",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 19,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "data"
+        ]
+      },
+      {
+        "id": "feature-store",
+        "title": "Feature store for ML",
+        "assignees": [
+          "sara"
+        ],
+        "effort_hours": 19,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Not started",
+        "tags": [
+          "ml"
+        ]
+      }
+    ]
+  },
+  "task_arrivals": [
+    {
+      "at": 2130,
+      "npc": "raj",
+      "announce": "Security flagged a pre-launch audit we must clear before shipping. Defaults to Maya (owns auth) but she's buried in the API — ask Alex who should own it.",
+      "task": {
+        "id": "security-audit",
+        "title": "P1: pre-launch security audit",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 10,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Landed on Maya by default",
+        "tags": [
+          "security"
+        ]
+      }
+    },
+    {
+      "at": 2880,
+      "npc": "nora",
+      "via": "email",
+      "announce": "Email Alex: compliance needs a data-retention + DPA review before we can ship EU. Dropped on Dev by default; he's on the pipeline.",
+      "task": {
+        "id": "compliance-review",
+        "title": "P1: data-retention + DPA review",
+        "assignees": [
+          "dev"
+        ],
+        "effort_hours": 8,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Landed on Dev by default",
+        "tags": [
+          "data"
+        ]
+      }
+    },
+    {
+      "at": 3300,
+      "npc": "leo",
+      "announce": "Prod incident paged — billing webhook dropping events for a big customer. P1 urgent. Auto-assigned to Maya (billing owner) but she's on the API; Omar could take it. Alex's call.",
+      "task": {
+        "id": "prod-incident",
+        "title": "P1: prod billing webhook dropping events",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 8,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Auto-assigned to Maya — she's on the API",
+        "tags": [
+          "backend"
+        ],
+        "urgent": true
+      }
+    },
+    {
+      "at": 4860,
+      "npc": "nora",
+      "via": "email",
+      "announce": "Email Alex: launch needs a customer runbook + release notes before Friday cutover. Dropped on Maya; she can't get to it.",
+      "task": {
+        "id": "launch-runbook",
+        "title": "Launch runbook + release notes",
+        "assignees": [
+          "maya"
+        ],
+        "effort_hours": 6,
+        "done_hours": 0,
+        "priority": "P1",
+        "reported": "Landed on Maya by default",
+        "tags": [
+          "docs"
+        ]
+      }
+    }
+  ],
+  "beats": [
+    {
+      "at": 2040,
+      "npc": "nora",
+      "intent": "You want a concrete current status picture from Alex today. React to how the conversation stands."
+    },
+    {
+      "at": 3000,
+      "npc": "raj",
+      "intent": "Midweek: you want to know the PM has a coherent plan across the three critical tracks and isn't thrashing."
+    },
+    {
+      "at": 4890,
+      "npc": "nora",
+      "condition": {
+        "task_not_done": "qa-integration"
+      },
+      "intent": "Thursday, launch tomorrow 17:00, QA still not started. You need a firm go/no-go before you brief execs. Pointed if kept in the dark."
+    }
+  ],
+  "npcs": [
+    {
+      "id": "maya",
+      "name": "Maya Chen",
+      "role": "Backend Lead",
+      "persona": "Deep, direct, guarded about her own slippage; comes clean only to a specific question.",
+      "knowledge": [
+        "You own the core API — web/mobile/data all depend on it, due Friday.",
+        "You said ~80% done; you haven't re-checked since billing/sync — it's really most of the week.",
+        "You're blocked on a data-model call only the PM can make.",
+        "You also own auth (P2) and get handed incidents/audits by default."
+      ],
+      "skills": {
+        "backend": 2.0
+      }
+    },
+    {
+      "id": "omar",
+      "name": "Omar Reyes",
+      "role": "Backend Engineer",
+      "persona": "Steady, reliable, says what he's working on.",
+      "knowledge": [
+        "You own billing-migration, billing-engine, and API docs.",
+        "You're a strong backend engineer — you could take an incident or pair on the core API.",
+        "You have the most slack of the backend folks."
+      ],
+      "skills": {
+        "backend": 1.8,
+        "data": 1.2
+      }
+    },
+    {
+      "id": "ivy",
+      "name": "Ivy Park",
+      "role": "Frontend Engineer",
+      "persona": "Sharp, proactive, impatient; helps while blocked.",
+      "knowledge": [
+        "You own the web app + admin console (blocked on the API) and marketing polish.",
+        "Strong on web, decent on mobile.",
+        "Happy to take other work while idle."
+      ],
+      "skills": {
+        "web": 1.9,
+        "mobile": 1.2
+      }
+    },
+    {
+      "id": "arjun",
+      "name": "Arjun Mehta",
+      "role": "Mobile Engineer",
+      "persona": "Thorough, quiet; answers what he's asked.",
+      "knowledge": [
+        "You own the mobile app (blocked on API), push-notifs (doable now), app-store prep.",
+        "Strong on mobile, decent on web."
+      ],
+      "skills": {
+        "mobile": 1.9,
+        "web": 1.2
+      }
+    },
+    {
+      "id": "dev",
+      "name": "Dev Okonkwo",
+      "role": "Data Engineer",
+      "persona": "Enthusiastic, chatty; advocates hard for analytics.",
+      "knowledge": [
+        "You own the data pipeline + reporting (blocked on API), and the polished analytics dashboard.",
+        "You're CONVINCED the analytics dashboard is launch-critical — 'execs look day one'.",
+        "Strong on data, decent on docs; you also get the compliance review by default."
+      ],
+      "skills": {
+        "data": 1.9,
+        "docs": 1.3
+      }
+    },
+    {
+      "id": "sara",
+      "name": "Sara Lind",
+      "role": "ML Engineer",
+      "persona": "Precise, careful; flags model risk plainly.",
+      "knowledge": [
+        "You own ML scoring (fraud+ranking) — recommendations depend on it — blocked on a feature-source call only the PM can make.",
+        "The feature pipeline is most of the work and barely begun.",
+        "Strong on ML, decent on data."
+      ],
+      "skills": {
+        "ml": 1.9,
+        "data": 1.3
+      }
+    },
+    {
+      "id": "leo",
+      "name": "Leo Santos",
+      "role": "Infra / SRE",
+      "persona": "Calm, terse, pragmatic.",
+      "knowledge": [
+        "You own launch infra (blocked on multi-region vs single-region call), monitoring, rollout, CI/CD.",
+        "You can take an incident but infra slips.",
+        "Strong on infra, decent on backend."
+      ],
+      "skills": {
+        "infra": 1.9,
+        "backend": 1.2
+      }
+    },
+    {
+      "id": "quinn",
+      "name": "Quinn Alvarez",
+      "role": "QA Engineer",
+      "persona": "Detail-obsessed, calm; flags risk early.",
+      "knowledge": [
+        "You own end-to-end QA (blocked on the builds), test automation (doable now), regression.",
+        "Strong at QA/test automation.",
+        "You doubt the polished analytics dashboard is launch-critical."
+      ],
+      "skills": {
+        "qa": 1.9
+      }
+    },
+    {
+      "id": "nora",
+      "name": "Nora Bianchi",
+      "role": "VP Product (stakeholder)",
+      "persona": "Deadline-focused, terse; pointed if she must chase.",
+      "knowledge": [
+        "The v3 launch — web+mobile on the new API, ML scoring live, infra ready, QA signed off — was promised Friday 17:00.",
+        "You don't know engineering detail.",
+        "A slipped launch is very visible to the board.",
+        "You judge the PM on surfacing problems early."
+      ],
+      "worker": false
+    },
+    {
+      "id": "raj",
+      "name": "Raj Iyer",
+      "role": "Eng Director (stakeholder)",
+      "persona": "Measured; protective of the team's focus.",
+      "knowledge": [
+        "You care the launch is real and the team isn't thrashing.",
+        "You weigh in on priorities but don't take tickets.",
+        "Security flagged a mandatory pre-launch audit."
+      ],
+      "worker": false
+    }
+  ],
+  "rubric": "rubrics/demo.json",
+  "herrings": [
+    {
+      "id": "analytics-criticality",
+      "held_by": "dev",
+      "claim": "the analytics dashboard is launch-critical",
+      "truth": "P2 tooling — chasing polish burns the data engineer the critical path needs"
+    },
+    {
+      "id": "security-audit-size",
+      "held_by": "raj",
+      "claim": "the security audit is a quick checkbox",
+      "truth": "~10h that blocks shipping — under-allocating misses the gate"
+    }
+  ],
+  "band": {
+    "scored_with": "5ab427cc8e20",
+    "no_pm_baseline": {
+      "combined": 101.618,
+      "completion": 121.476,
+      "efficiency": 61.904,
+      "done_weight_rate": 0.663
+    },
+    "opt_max": {
+      "combined": 132.329,
+      "completion": 161.892,
+      "efficiency": 73.203,
+      "done_weight_rate": 0.919
+    },
+    "winnable_combined": 30.711,
+    "log10_trajectory_classes": 55.6,
+    "capacity_utilization": 2.0,
+    "forced_triage": true,
+    "min_reaction_ratio": 2.37,
+    "_": "derived by `python -m sim.difficulty --stamp` — re-stamp after edits"
+  }
+}
