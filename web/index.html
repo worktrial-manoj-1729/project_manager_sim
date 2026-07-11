@@ -41,7 +41,7 @@
 
   body.bench-mode #scrub-row, body.bench-mode #clock,
   body.bench-mode #mode-badge, body.bench-mode #runs-row,
-  body.bench-mode #meta-line { display: none !important; }
+  body.bench-mode #meta-line, body.bench-mode #traj-picker { display: none !important; }
   #scrub-row { display: flex; align-items: center; gap: 12px; padding: 8px 20px;
                border-bottom: 1px solid var(--grid); font-size: 12px; color: var(--ink-2); }
   #scrub { flex: 1; accent-color: var(--c-agent); }
@@ -61,6 +61,12 @@
   .chip-run .dot.live { background: #0ca30c; animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
   .chip-run .sc { font-variant-numeric: tabular-nums; color: var(--ink-1); }
+  .chip-run .tk { color: var(--ink-3); max-width: 14ch; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; }
+  .chip-run.sel .tk { color: var(--ink-2); }
+  #traj-picker select { background: var(--surface-1); color: var(--ink-1);
+                        border: 1px solid var(--border); border-radius: 8px;
+                        padding: 5px 9px; font-size: 12px; max-width: 380px; }
 
   nav { display: flex; gap: 4px; padding: 8px 20px 0; }
   nav button { border: 1px solid var(--border); border-bottom: none; background: transparent;
@@ -149,7 +155,8 @@
   .prob-node { position: relative; border: 1.5px solid var(--baseline); border-radius: 8px;
                padding: 7px 9px; background: var(--surface-1); font-size: 12px; }
   .prob-node.lands { border-style: dashed; }
-  .pn-title { font-weight: 600; line-height: 1.25; }
+  .pn-title { font-weight: 600; line-height: 1.25; display: -webkit-box;
+              -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .pn-meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
   .pn-prio { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
   .pn-p0 { background: rgba(208,59,59,.16);   color: #d03b3b; }
@@ -278,6 +285,19 @@
   <button data-tab="bench">Benchmark</button>
 </nav>
 
+<!-- GLOBAL run selector: pins one (task, model, run) while you hop between
+     Feed / Timeline / Trajectory. Hidden on Benchmark (cross-run view). -->
+<div class="panel" id="traj-picker" style="margin:14px 20px 0;display:none">
+  <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em">task</span>
+    <select id="sel-task"></select>
+    <span style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em">model</span>
+    <select id="sel-model"></select>
+    <span style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em">run</span>
+    <select id="sel-run"></select>
+  </div>
+</div>
+
 <main>
   <section id="tab-live" class="tab active">
     <div id="live-grid">
@@ -316,6 +336,14 @@
 
   <section id="tab-trajectory" class="tab">
     <div class="panel" id="traj-score" style="margin-bottom:14px;display:none"></div>
+    <div class="panel" id="analysis-panel" style="margin-bottom:14px;display:none">
+      <h3>LLM post-mortem — commentary only, never part of the score</h3>
+      <div style="display:flex;gap:10px;align-items:center;margin:6px 0 8px">
+        <button class="small" id="analyze-btn">Analyze</button>
+        <span id="analysis-meta" style="color:var(--ink-3);font-size:11px"></span>
+      </div>
+      <div id="analysis-body" style="font-size:13px;line-height:1.6;max-width:920px"></div>
+    </div>
     <div class="panel" id="problem-panel" style="margin-bottom:14px;display:none">
       <details id="problem-details" open>
         <summary>THE PROBLEM — what this week throws at the PM</summary>
@@ -329,6 +357,7 @@
           <span><b>x/y h</b> = hours already done at week start / total hours the task takes</span>
         </div>
         <div id="problem-stats" class="legend" style="margin:6px 0 0"></div>
+        <div id="problem-people" class="legend" style="margin:6px 0 0"></div>
         <div id="problem-scroll"><div id="problem-canvas">
           <svg id="problem-edges"></svg>
           <div class="prob-cols" id="problem-cols"></div>
@@ -403,7 +432,8 @@ async function init() {
       currentRun = RUNS.length ? RUNS[0].id : null;
       const want = parseHash().run;           // "#…&run=<id>" wins on load
       if (want && RUNS.some(r2 => r2.id === want)) currentRun = want;
-      $("runs-row").style.display = "flex";
+      // chips wall retired: the global task/model/run picker is the
+      // selector on every run-scoped tab (chips scaled badly past ~30 runs)
       renderChips();
       setInterval(refreshRuns, 4000);
     }
@@ -430,6 +460,7 @@ async function refreshRuns() {
 
 function loadRun(id) {
   currentRun = id; EVENTS = []; PENDING = []; CLOCK = 0; cursor = null;
+  poll._painted = false;   // force one repaint even if the new run is empty
   $("scrub").max = 0; $("scrub").value = 0;
   renderChips();
   fetch(api("/api/meta")).then(r => r.json()).then(m => {
@@ -443,10 +474,11 @@ function renderChips() {
   $("runs-row").innerHTML = RUNS.map(r => {
     const short = r.id.replace("run-", "");
     const sc = r.score != null ? `<span class="sc">${r.score.toFixed(2)}</span>` : "";
+    const tk = r.task ? `<span class="tk" title="${esc(r.task)}">${esc(r.task)}</span> · ` : "";
     return `<div class="chip-run ${r.id === currentRun ? "sel" : ""}"
-      onclick="selectRun('${r.id}')" title="${r.events} events">
+      onclick="selectRun('${r.id}')" title="${esc(r.task || "")} — ${r.events} events">
       <span class="dot ${r.live ? "live" : ""}"></span>
-      ${esc(r.label)} · ${short} ${sc}</div>`;
+      ${tk}${esc(r.label)} · ${short} ${sc}</div>`;
   }).join("");
 }
 
@@ -544,8 +576,14 @@ function aggregateTasks(runs) {
     (a.band == null) - (b.band == null) || (a.band || 0) - (b.band || 0));
 }
 
+let BENCH_SIG = "";
 async function renderBench() {
   BENCH_TASKS = await fetchBenchTasks();
+  // re-render ONLY when the data changed — the 4s refresh otherwise rebuilds
+  // the DOM under the cursor and kills hover tooltips/highlights mid-look
+  const sig = JSON.stringify(BENCH_TASKS);
+  if (BENCH_FOCUS == null && sig === BENCH_SIG) return;
+  BENCH_SIG = sig;
   if (BENCH_FOCUS != null && BENCH_TASKS.some(t => t.task === BENCH_FOCUS)) {
     const cur = BENCH_OPEN[BENCH_FOCUS] || {};
     BENCH_OPEN[BENCH_FOCUS] = {open: true, model: cur.model};
@@ -850,7 +888,10 @@ async function poll() {
   const scrub = $("scrub");
   scrub.max = Math.max(0, EVENTS.length - 1);
   if (cursor === null) scrub.value = scrub.max;
-  if (grew || cursor === null) { render(); updateTasks(); }
+  // repaint only when the log actually grew (plus one first paint) — a
+  // finished run polled every 1.2s must not rebuild the DOM under the
+  // cursor, or hover tooltips die in seconds
+  if (grew || !poll._painted) { poll._painted = true; render(); updateTasks(); }
   refreshTranscript();   // cached per run; refetches only while the run is live
   refreshProblem();      // cached per run; fetched once, overlay re-renders
 }
@@ -897,7 +938,7 @@ function render() {
   else { badge.textContent = "REWIND"; badge.className = "rewind";
     $("scrub-label").textContent = `event #${cursor} — ${fmt(viewClock())}`; }
   renderChat(); renderPending(); renderDocs(); renderTimeline();
-  renderPmTraj(); renderProblem(); renderTrajScore(); renderTrajectory();
+  renderPmTraj(); renderProblem(); renderTrajPicker(); renderTrajScore(); renderAnalysis(); renderTrajectory();
 }
 
 // Delivery badge: how the signal travels on each side (stamped by the
@@ -1247,6 +1288,108 @@ function renderTrajScore() {
     </div>`;
 }
 
+// TASK + RUN PICKER: the chips row scales badly past ~30 runs; in the
+// trajectory view these two dropdowns are the primary selector. Both route
+// through selectRun() -> hash, so chips/URL/state stay in sync.
+const bestFirst = (a, b) =>               // scored runs by score desc; live/unscored last
+  (b.score == null ? -Infinity : b.score) - (a.score == null ? -Infinity : a.score);
+function renderTrajPicker() {
+  const panel = $("traj-picker");
+  if (!panel) return;
+  if (!HUBMODE || !(RUNS || []).length) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+  const cur = (RUNS || []).find(r => r.id === currentRun);
+  const curTask = cur ? (cur.task || "unknown") : "unknown";
+  const curModel = cur ? (cur.label || "unknown") : "unknown";
+  const tasks = [...new Set(RUNS.map(r => r.task || "unknown"))].sort();
+  const inTask = RUNS.filter(r => (r.task || "unknown") === curTask);
+  const models = [...new Set(inTask.map(r => r.label || "unknown"))].sort();
+  const runs = inTask.filter(r => (r.label || "unknown") === curModel)
+                     .slice().sort(bestFirst);
+  const sig = tasks.join("|") + ":" + curTask + ":" + models.join("|") + ":" +
+              curModel + ":" +
+              runs.map(r => r.id + (r.score == null ? "" : r.score)).join("|") +
+              ":" + currentRun;
+  if (panel.dataset.sig === sig) return;     // no churn while polling
+  panel.dataset.sig = sig;
+  $("sel-task").innerHTML = tasks.map(t =>
+    `<option value="${esc(t)}" ${t === curTask ? "selected" : ""}>${esc(t)}</option>`).join("");
+  $("sel-model").innerHTML = models.map(m =>
+    `<option value="${esc(m)}" ${m === curModel ? "selected" : ""}>${esc(m)}</option>`).join("");
+  $("sel-run").innerHTML = runs.map(r =>
+    `<option value="${esc(r.id)}" ${r.id === currentRun ? "selected" : ""}>${
+      r.score != null ? r.score.toFixed(2) : r.live ? "live" : "unscored"} · ${
+      r.id.replace("run-", "")}</option>`).join("");
+}
+document.addEventListener("change", e => {
+  if (e.target.id === "sel-run") selectRun(e.target.value);
+  else if (e.target.id === "sel-model") {
+    const cur = (RUNS || []).find(r => r.id === currentRun);
+    const t = cur ? (cur.task || "unknown") : "unknown";
+    const best = RUNS.filter(r => (r.task || "unknown") === t &&
+                                  (r.label || "unknown") === e.target.value)
+                     .sort(bestFirst)[0];
+    if (best) selectRun(best.id);
+  } else if (e.target.id === "sel-task") {
+    const best = RUNS.filter(r => (r.task || "unknown") === e.target.value)
+                     .sort(bestFirst)[0];
+    if (best) selectRun(best.id);
+  }
+});
+
+// LLM POST-MORTEM: explicit, cached, commentary-only. GET returns the cached
+// analysis.json if the run has one; the button POSTs to generate (one LLM
+// call, temperature 0). The reward pipeline never reads this.
+const ANALYSES = {};   // run id -> {text, model} | {pending: true}
+function mdlite(t) {
+  return esc(t).split("\n").map(l => {
+    if (/^#{2,3}\s/.test(l)) return `<div style="font-weight:700;color:var(--ink-1);margin:10px 0 3px">${l.replace(/^#+\s*/, "")}</div>`;
+    l = l.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    if (/^[-•]\s/.test(l)) return `<div style="margin:2px 0 2px 14px">• ${l.replace(/^[-•]\s*/, "")}</div>`;
+    return l ? `<div style="margin:2px 0">${l}</div>` : "";
+  }).join("");
+}
+function renderAnalysis() {
+  const panel = $("analysis-panel");
+  if (!panel) return;
+  const rec = (RUNS || []).find(r => r.id === currentRun);
+  if (!HUBMODE || !rec || rec.score == null) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+  const a = ANALYSES[currentRun];
+  const btn = $("analyze-btn"), meta = $("analysis-meta"), body = $("analysis-body");
+  if (a === undefined) {           // first look: pull the cache, then re-render
+    ANALYSES[currentRun] = {pending: true};
+    fetch(api("/api/analysis")).then(r => r.json())
+      .then(d => { ANALYSES[currentRun] = d; renderAnalysis(); })
+      .catch(() => { ANALYSES[currentRun] = {text: null}; });
+    return;
+  }
+  if (a.pending) {
+    btn.disabled = true;
+    meta.textContent = a.pending === "gen"
+      ? "analyzing… headless Claude Code is reading the run dir (a minute or two)"
+      : "…";
+    return;
+  }
+  btn.disabled = false;
+  if (a.error) { meta.textContent = a.error; body.innerHTML = ""; btn.textContent = "Analyze"; return; }
+  if (!a.text) { meta.textContent = "not analyzed yet — runs headless Claude Code over the run dir"; body.innerHTML = ""; btn.textContent = "Analyze"; return; }
+  btn.textContent = "Re-analyze";
+  meta.textContent = `${a.model || ""} · analyzed at score ${a.analyzed_score != null ? a.analyzed_score : "—"}`
+    + (a.analyzed_score !== rec.score ? " (run re-scored since — consider re-analyzing)" : "");
+  body.innerHTML = mdlite(a.text);
+}
+document.addEventListener("click", e => {
+  if (e.target.id !== "analyze-btn") return;
+  const run = currentRun, a = ANALYSES[run] || {};
+  ANALYSES[run] = {pending: "gen"};
+  renderAnalysis();
+  const base = api("/api/analysis");
+  fetch(base + (a.text ? (base.includes("?") ? "&" : "?") + "refresh=1" : ""), {method: "POST"})
+    .then(r => r.json()).then(d => { ANALYSES[run] = d; renderAnalysis(); })
+    .catch(err => { ANALYSES[run] = {error: String(err)}; renderAnalysis(); });
+});
+
 function renderProblem() {
   const panel = $("problem-panel"), host = $("problem-cols");
   if (!panel || !host) return;
@@ -1303,6 +1446,88 @@ function renderProblem() {
       (cap ? ` / ${cap}h team capacity (<b>${(remaining / cap * 100).toFixed(0)}%</b> load, ${rec.workers} workers)` : "") + `</span>` +
       (urgent ? `<span>⚡ <b>${urgent}</b> urgent</span>` : "");
   }
+
+  // ---- the team: hidden skills (researcher ground truth — the PM never
+  // sees these numbers) + status AT THE REWIND CURSOR, so scrubbing shows
+  // "Arjun was free when that task landed" ----
+  const peopleEl = $("problem-people");
+  if (peopleEl && Array.isArray(rec.people) && rec.people.length) {
+    const meetings = {};
+    for (const e of evs) {
+      if (e.kind === "meeting_scheduled") meetings[e.id] = e;
+      else if (e.kind === "meeting_cancelled") delete meetings[e.id];
+    }
+    const inSession = id => Object.values(meetings).some(m =>
+      m.start <= curT && curT < m.end && (m.attendees || []).includes(id));
+    const ownedLive = id => rec.tasks.filter(t =>
+      t.arrival <= curT && doneAt[t.id] == null &&
+      String(curOwner[t.id] || "").split("+").includes(id));
+    const skillStr = s => Object.entries(s || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag, x]) => `${tag} ×${x}`).join(", ");
+    // strip the parenthetical detail ("Core backend API (auth, bil…" ->
+    // "Core backend API") — a whole phrase beats a mid-word cut
+    const tshort = t => {
+      let s = String(t.title).split(" (")[0];
+      if (s.length > 26) {
+        const c = s.slice(0, 25), sp = c.lastIndexOf(" ");
+        s = (sp > 12 ? c.slice(0, sp) : c) + "…";
+      }
+      return s;
+    };
+    // one entry per person, with a sort rank: anomalies first (assigned yet
+    // blocked-idle), then heaviest queues, then free, then stakeholders —
+    // at 100 people the interesting rows must surface, not drown
+    const entries = rec.people.map(p => {
+      const dot = `<span class="chip" style="background:${actorColor[p.id] || "var(--ink-3)"};border-radius:50%"></span>`;
+      const sk = skillStr(p.skills);
+      if (!p.worker)
+        return {kind: "stake", rank: [3, 0], html:
+          `<span style="opacity:.65">${dot}${esc(p.name.split(" ")[0])} <span style="color:var(--ink-3)">— ${esc(p.role)}${
+            /stakeholder/i.test(p.role) ? "" : " (stakeholder)"}</span></span>`};
+      // preemptive scheduler: a person WORKS one task at a time — the
+      // count is queue depth; "~working" = top RUNNABLE task (urgent ->
+      // priority -> age, dep-blocked skipped). Gating questions and manual
+      // reorders aren't visible client-side, hence the ~ (estimate).
+      const owned = ownedLive(p.id).sort((a, b) =>
+        ((b.urgent ? 1 : 0) - (a.urgent ? 1 : 0)) ||
+        ((PRIO_RANK[a.priority] ?? 9) - (PRIO_RANK[b.priority] ?? 9)) ||
+        (a.arrival - b.arrival));
+      const runnable = owned.filter(t => (t.blocked_by || [])
+        .every(b => !known.has(b) || doneAt[b] != null));
+      const qtip = owned.map((t, i) => `${i + 1}. [${t.priority}] ${t.title}`).join("&#10;");
+      let kind, rank, status;
+      if (inSession(p.id)) {
+        kind = "session"; rank = [1, -99];
+        status = `<b style="color:var(--c-n4)">in session</b>`;
+      } else if (runnable.length) {
+        kind = "working"; rank = [1, -owned.length];
+        status = `<span title="${esc(qtip)}"><b style="color:var(--c-n2)">queue ${owned.length}</b> <span style="color:var(--ink-3)">· ~working: ${esc(tshort(runnable[0]))}</span></span>`;
+      } else if (owned.length) {
+        kind = "blocked"; rank = [0, -owned.length];
+        status = `<span title="${esc(qtip)}"><b style="color:var(--c-n3)">queue ${owned.length} · all blocked — idle</b></span>`;
+      } else {
+        kind = "free"; rank = [2, 0];
+        status = `<b style="color:var(--c-n1)">free</b>`;
+      }
+      return {kind, rank, html:
+        `<span>${dot}<b>${esc(p.name.split(" ")[0])}</b>${sk ? ` <span style="color:var(--ink-3)">${esc(sk)}</span>` : ""} · ${status}</span>`};
+    }).sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1]);
+    const n = k => entries.filter(e => e.kind === k).length;
+    const summary =
+      `<span style="color:var(--ink-3)">team <b>${entries.filter(e => e.kind !== "stake").length}</b>` +
+      ` — <b style="color:var(--c-n1)">${n("free")}</b> free` +
+      ` · <b style="color:var(--c-n2)">${n("working")}</b> working` +
+      (n("session") ? ` · <b style="color:var(--c-n4)">${n("session")}</b> in session` : "") +
+      (n("blocked") ? ` · <b style="color:var(--c-n3)">${n("blocked")}</b> blocked-idle` : "") +
+      ` (skills are <b>hidden</b> from the PM)</span>`;
+    // few people: inline chips; many: summary + expandable sorted grid
+    peopleEl.innerHTML = entries.length <= 10
+      ? summary + entries.map(e => e.html).join("")
+      : summary + `<details style="flex-basis:100%"><summary style="cursor:pointer;color:var(--ink-2);font-size:12px">show all ${entries.length}</summary>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:3px 16px;max-height:200px;overflow:auto;margin-top:6px">${
+            entries.map(e => `<span style="min-width:0">${e.html}</span>`).join("")}</div></details>`;
+  } else if (peopleEl) peopleEl.innerHTML = "";
   const cols = [];
   for (const t of rec.tasks)
     (cols[depth[t.id]] = cols[depth[t.id]] || []).push(t);
@@ -1312,12 +1537,24 @@ function renderProblem() {
       ((PRIO_RANK[a.priority] ?? 9) - (PRIO_RANK[b.priority] ?? 9)) ||
       (a.id < b.id ? -1 : 1));
 
-  const clip = s => { s = String(s); return s.length > 28 ? s.slice(0, 27) + "…" : s; };
+  // titles wrap over two lines on the card (CSS line-clamp); only truly
+  // long ones get cut, at a WORD boundary — mid-word "pi…" reads terribly
+  const clip = s => {
+    s = String(s);
+    if (s.length <= 60) return s;
+    const cut = s.slice(0, 59), sp = cut.lastIndexOf(" ");
+    return (sp > 30 ? cut.slice(0, sp) : cut) + "…";
+  };
   const node = t => {
     const seeded = t.source === "seed";
     const ghost = t.arrival > curT;   // hasn't landed yet at this cursor
     const p = String(t.priority || "").toUpperCase();
     const pCls = "pn-" + (PRIO_RANK[p] != null ? p.toLowerCase() : "p3");
+    // owner chip shows the CURRENT owner (after any reassignment at this cursor);
+    // the "from → to" move overlay below still records who it started on.
+    const _own = curOwner[t.id];
+    const ownLbl = _own ? _own.split("+").map(probShort).join("+") : "unowned";
+    const _moved = _own !== (t.owner || null);
     const eff = t.effort_hours == null ? "—"
       : (t.done_hours
          ? `<span title="${t.done_hours}h already done when the week starts, of ${t.effort_hours}h total (${t.effort_hours - t.done_hours}h left)">${t.done_hours}/${t.effort_hours}h</span>`
@@ -1336,7 +1573,7 @@ function renderProblem() {
       <div class="pn-title">${t.urgent ? "⚡ " : ""}${esc(clip(t.title))}</div>
       <div class="pn-meta"><span class="pn-prio ${pCls}">${esc(p || "—")}</span>
         <span class="pn-eff">${eff}</span>
-        <span class="pn-owner">on: ${probShort(t.owner)}</span></div>
+        <span class="pn-owner"${_moved ? ` title="PM reassigned — started on ${probShort(t.owner)}"` : ""}>on: ${ownLbl}</span></div>
       ${arr}${ov}</div>`;
   };
   host.innerHTML = cols.map(col =>
@@ -1508,6 +1745,25 @@ function activeTab() {
   return b ? b.dataset.tab : "live";
 }
 
+// the rewind scrubber DOCKS next to what it rewinds: on the Trajectory tab
+// it sits directly above THE PROBLEM graph (the thing that replays); on
+// Feed/Timeline it lives in the header. Moving the node keeps its
+// listeners and cursor value.
+const SCRUB_HOME = {parent: $("scrub-row").parentNode,
+                    next: $("scrub-row").nextElementSibling};
+function dockScrub(tab) {
+  const sr = $("scrub-row"), pp = $("problem-panel");
+  if (tab === "trajectory" && pp) {
+    pp.parentNode.insertBefore(sr, pp);
+    sr.classList.add("panel");
+    sr.style.marginBottom = "14px";
+  } else if (sr.parentNode !== SCRUB_HOME.parent) {
+    SCRUB_HOME.parent.insertBefore(sr, SCRUB_HOME.next);
+    sr.classList.remove("panel");
+    sr.style.marginBottom = "";
+  }
+}
+
 function activateTab(tab) {
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + tab));
@@ -1516,6 +1772,7 @@ function activateTab(tab) {
   // has no referent. The run-chips row stays: it shows live status and is
   // still how you hop between runs from anywhere.
   document.body.classList.toggle("bench-mode", tab === "bench");
+  dockScrub(tab);
   if (tab === "bench") renderBench(); else render();
 }
 
