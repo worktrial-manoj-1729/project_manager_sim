@@ -128,7 +128,7 @@
        <span class="violet">questions</span>: [{ at: <b>Tue 09:00</b>, <b>gates: true</b>, held_by: sam,   <span class="c">gates ⇒ the task</span>
                     ping: "OAuth or email+pw? blocked till you call it" }] }], <span class="c">STALLS till you answer</span>
 
-  <span class="c">"arrivals"</span>: [{ at: Tue, task: { security-audit, P1, assignees:[<b>maya</b>] }}],  <span class="c">← wrong (busy) owner</span>
+  <span class="c">"arrivals"</span>: [{ at: Tue, task: { security-audit, P1, assignees:[<b>dave</b>] }}],  <span class="c">← wrong (busy) owner</span>
   <span class="c">"npcs"</span>:    [{ id: sam, <span class="accent">skills</span>: { backend: <b>1.9</b> } }],           <span class="c">← HIDDEN speed; never shown</span>
   <span class="c">"band"</span>:    [ no-PM baseline , OPT ]                       <span class="c">← stamped by the gate, pre-run</span>
 }</div>
@@ -147,19 +147,19 @@
     <div class="rail"></div><div class="axis">sim time ▸</div>
     <div class="adv" style="left:21%; width:24%"></div>
     <div class="cutx" style="left:33%">✕</div>
-    <div class="tick you" style="left:7%"><span class="t">Mon 09:05</span>
+    <div class="tick you" style="left:7%"><span class="t">Mon 09:05 · via chat</span>
       <span><b>ping Sarah</b><br>costs +1 sim-min</span><i></i></div>
-    <div class="tick you" style="left:21%"><span class="t">Mon 09:06</span>
+    <div class="tick you" style="left:21%"><span class="t">Mon 09:06 · clock</span>
       <span><b>advance 3 h</b><br>sleep till 12:06</span><i></i></div>
     <div class="tick you ghost" style="left:45%"><span class="t">Mon 12:06</span>
       <span>never reached</span><i></i></div>
-    <div class="tick wrld" style="left:33%"><i></i><span class="t">Mon 09:42</span>
+    <div class="tick wrld" style="left:33%"><i></i><span class="t">Mon 09:42 · via chat</span>
       <span><b>Sarah replies</b><br>chat is push →<br><b class="red">PM woken early</b></span></div>
-    <div class="tick wrld" style="left:62%"><i></i><span class="t">Mon 11:30</span>
-      <span><b>email batch</b><br>inbox delivers on its grid</span></div>
-    <div class="tick wrld" style="left:79%"><i></i><span class="t">Tue 09:00</span>
+    <div class="tick wrld" style="left:62%"><i></i><span class="t">Mon 11:30 · via email</span>
+      <span><b>email batch</b><br>delivers on its grid</span></div>
+    <div class="tick wrld" style="left:79%"><i></i><span class="t">Tue 09:00 · physics</span>
       <span><b>overnight: +0 h</b><br>nobody works nights</span></div>
-    <div class="tick wrld fin" style="left:94%"><i></i><span class="t">Fri 17:00</span>
+    <div class="tick wrld fin" style="left:94%"><i></i><span class="t">Fri 17:00 · grader</span>
       <span><b>horizon</b><br>grade the world</span></div>
   </div>
 </section>
@@ -172,19 +172,19 @@
     <div class="lane you">pm — acts at "now"</div>
     <div class="lane wrld">world — async event heap</div>
     <div class="rail"></div><div class="axis">sim time ▸</div>
-    <div class="tick wrld" style="left:8%"><i></i><span class="t">Tue 09:00</span>
+    <div class="tick wrld" style="left:8%"><i></i><span class="t">Tue 09:00 · beat · chat</span>
       <span>Sam: <b>"OAuth or email+pw?"</b><br>api-core <b class="red">STALLS</b></span></div>
-    <div class="tick you" style="left:21%"><span class="t">Tue 09:05</span>
-      <span><b>PM calls it: OAuth</b><br>api-core unblocked</span><i></i></div>
-    <div class="tick wrld" style="left:37%"><i></i><span class="t">Tue 13:00</span>
-      <span><b>Sarah: 70% still left</b><br>the blocker surfaces</span></div>
-    <div class="tick you" style="left:51%"><span class="t">Tue 13:10</span>
+    <div class="tick you" style="left:21%"><span class="t">Tue 09:05 · via chat</span>
+      <span><b>PM → Sam: "OAuth"</b><br>lands at once → unblocked</span><i></i></div>
+    <div class="tick wrld" style="left:37%"><i></i><span class="t">Tue 13:00 · beat · chat</span>
+      <span><b>Sarah: "70% still left"</b><br>the blocker surfaces</span></div>
+    <div class="tick you" style="left:51%"><span class="t">Tue 13:10 · calendar</span>
       <span><b>PM books a 2 h session</b><br>Sarah + Dave, on migration</span><i></i></div>
-    <div class="tick wrld" style="left:66%"><i></i><span class="t">Wed 10:00</span>
+    <div class="tick wrld" style="left:66%"><i></i><span class="t">Wed 10:00 · calendar</span>
       <span><b>session fires</b><br>hands pool ×1.9</span></div>
-    <div class="tick wrld" style="left:80%"><i></i><span class="t">Wed 12:00</span>
+    <div class="tick wrld" style="left:80%"><i></i><span class="t">Wed 12:00 · physics</span>
       <span><b>deposit lands</b><br>+3.8 h at meeting-end</span></div>
-    <div class="tick wrld fin" style="left:94%"><i></i><span class="t">Thu 15:00</span>
+    <div class="tick wrld fin" style="left:94%"><i></i><span class="t">Thu 15:00 · board</span>
       <span><b>migration ships</b><br>a day early</span></div>
   </div>
 </section>
@@ -197,18 +197,16 @@
     <div class="lane you">pm — acts at "now"</div>
     <div class="lane wrld">world — async event heap</div>
     <div class="rail"></div><div class="axis">sim time ▸</div>
-    <div class="tick wrld" style="left:8%"><i></i><span class="t">Tue 11:30</span>
-      <span><b>email batch: audit arrives</b><br>auto-owned by Dave — <b>the busiest</b></span></div>
-    <div class="tick you" style="left:24%"><span class="t">Tue 11:45</span>
+    <div class="tick wrld" style="left:8%"><i></i><span class="t">Tue 11:30 · beat · email</span>
+      <span><b>audit arrives</b><br>auto-owned by Dave — busiest</span></div>
+    <div class="tick you" style="left:24%"><span class="t">Tue 11:45 · board</span>
       <span><b>PM reads the board</b><br>Dave 30 h deep, Ana free</span><i></i></div>
-    <div class="tick you" style="left:40%"><span class="t">Tue 11:47</span>
+    <div class="tick you" style="left:40%"><span class="t">Tue 11:47 · board</span>
       <span><b>reassign → Ana</b><br>both notified, hours carry</span><i></i></div>
-    <div class="tick you" style="left:56%"><span class="t">Tue 11:48</span>
+    <div class="tick you" style="left:56%"><span class="t">Tue 11:48 · board</span>
       <span><b>reorder Dave's queue</b><br>P0 back on top</span><i></i></div>
-    <div class="tick wrld fin" style="left:74%"><i></i><span class="t">Thu 15:00</span>
+    <div class="tick wrld fin" style="left:88%"><i></i><span class="t">Thu 15:00 · board</span>
       <span><b>audit ships</b><br>Ana had the room</span></div>
-    <div class="tick wrld ghost" style="left:91%"><i></i><span class="t">(unmanaged)</span>
-      <span>Dave gets to it "eventually"<br><b class="red">misses the week</b></span></div>
   </div>
 </section>
 
@@ -222,11 +220,10 @@
 <span class="c">10:00</span> ping Sarah
 <span class="c">10:01</span> ping again
 <span class="c">10:02</span> ping again
-→ answers in 5–45 min  <span class="c">(seeded delay)</span>
-→ each ping costs a <b class="red">10-min</b> refocus
-  tax <span class="c">(chat_interrupt_minutes)</span>, and
-  they STACK: <b class="red">3 × 10 = 30 min</b> lost</div>
-      <p class="cap">the tax is a config knob; taxes stack, they don't overlap</p>
+→ answers in 5–45 min <span class="c">(seeded)</span>
+→ each ping: a <b class="red">10-min</b> focus tax
+→ taxes STACK: <b class="red">3 × 10 = 30 min</b></div>
+      <p class="cap">the tax is a config knob <span class="sub">(chat_interrupt_minutes)</span></p>
     </div>
     <div>
       <div class="ex"><b class="green">email</b>
@@ -235,7 +232,7 @@
       next inbox pass
 → slower answer
 → <b class="green">zero focus cost</b></div>
-      <p class="cap">answered at her next inbox pass; the agent's own inbox batches every <b>30 min</b> <span class="sub">(email_batch_minutes, config)</span></p>
+      <p class="cap">both inboxes batch on a <b>30-min</b> grid <span class="sub">(email_batch_minutes)</span></p>
     </div>
     <div>
       <div class="ex"><b class="violet">meeting</b>
@@ -251,6 +248,37 @@
   complaints from over-pinged coworkers, or lower scores.</p>
 </section>
 
+<!-- 3a2 · how an NPC answers -->
+<section class="slide">
+  <div class="kicker">1 · the world — communication · under the hood</div>
+  <h2>How a coworker answers — chat vs email</h2>
+  <div class="cols">
+    <div>
+      <div class="ex"><b class="accent">chat — a reply event per message</b>
+<span class="c">10:00</span> PM pings Sarah
+      → instant in her context
+      → <b class="red">10-min focus tax</b>
+      → reply due: seeded <b>5–45 min</b>
+<span class="c">10:23</span> npc_respond fires
+      → <b>ONE LLM call</b>, 1–3 sentences
+      → push: <b>wakes the PM</b> mid-advance</div>
+    </div>
+    <div>
+      <div class="ex"><b class="amber">email — the wakeup batch answers</b>
+<span class="c">10:00</span> PM emails Sarah
+      → <b class="green">zero tax</b>, nothing scheduled
+      → inbox +1, queues silently
+<span class="c">11:25</span> her ~2 h heartbeat fires
+      → <b>ONE LLM call</b>, answers the batch
+<span class="c">11:30</span> reply rides the delivery grid
+      → lands in the PM's inbox</div>
+    </div>
+  </div>
+  <p class="foot">Same brain both ways: one LLM call over the coworker's experience stream writes only the
+  <b>words</b>. The <b>when</b> is pure seeded rules — chat draws per message; email waits for the
+  wakeup. In a meeting, both defer: nobody answers from inside a room.</p>
+</section>
+
 <!-- 3b · no channel dominates -->
 <section class="slide">
   <div class="kicker">1 · the world — why agents can't just pick one channel</div>
@@ -258,13 +286,13 @@
   <div class="cols3">
     <div>
       <div class="ex"><b class="accent">chat wins</b>
-<span class="c">Fri 09:30</span> Sarah's task is <b>STALLED</b>
+<span class="c">Fri 09:30</span> Sam's task is <b>STALLED</b>
 until you answer one question.
 
 chat  → reply lands <b>at once</b> →
-        unblocked. <span class="c">20-min tax ≪</span>
+        unblocked. <span class="c">10-min tax ≪</span>
         <span class="c">the hours she'd sit idle</span>
-email → waits ~2h for her inbox
+email → waits ~2h for his inbox
         → <b class="red">the morning is gone</b>
 meet  → a room booked to
         say one sentence</div>
@@ -278,7 +306,7 @@ by end of day. No rush.
 email → zero focus cost,
         answered at next pass —
         <span class="c">hours of slack to spare</span>
-chat×2 → <b class="red">40+ min of focus</b>
+chat×2 → <b class="red">20+ min of focus</b>
         stolen mid-crunch →
         completions slip
 meet  → 3 person-hours for
@@ -313,10 +341,10 @@ only a room adds a 2nd pair of hands.</span></div>
   <div class="ex"><span class="c">Tue 11:30</span>  incident arrives → auto-assigned to <b>Dave</b> (the yes-to-everything volunteer)
 <span class="c">Tue 11:30</span>  Dave pings you: "SSO is down for Meridian — I've got it 👍"
                                         <span class="c">(ticket: sso-4f2a, currently on dave)</span>
-<span class="c">              Dave's queue: 30h. Sarah frees up Wednesday.</span>
+<span class="c">              Dave's queue: 30h. Ana frees up Wednesday.</span>
 
-your move A:  <span class="c">Tue 11:32</span>  reassign → Sarah        → ships <b class="green">Thu 15:00</b>
-your move B:  <span class="c">Thu 09:00</span>  reassign → Sarah        → work only counts from Thursday → <b class="red">misses Friday</b>
+your move A:  <span class="c">Tue 11:32</span>  reassign → Ana          → ships <b class="green">Thu 15:00</b>
+your move B:  <span class="c">Thu 09:00</span>  reassign → Ana          → work only counts from Thursday → <b class="red">misses Friday</b>
 your move C:  do nothing               → Dave gets to it eventually → <b class="amber">the unmanaged week</b></div>
   <p class="cap">People self-schedule by priority; half-done work is never lost.
   Your levers: <b>move</b> a task or <b>reorder</b> a queue (relabeling can't inflate the score).
@@ -329,10 +357,10 @@ your move C:  do nothing               → Dave gets to it eventually → <b cla
   <h2>Each coworker is an agent: a persona + private knowledge</h2>
   <div class="cols">
     <div>
-      <div class="ex" style="font-size:1.95vh"><span class="c">npc</span> <b>maya</b> {
+      <div class="ex" style="font-size:1.95vh"><span class="c">npc</span> <b>sam</b> {
   role: "Backend Lead",
   <span class="green">persona</span>: "direct, but guarded about
-    her own slippage; only comes clean
+    his own slippage; only comes clean
     when asked a specific question",
   <span class="violet">knowledge</span>: [
     "you own the API; 3 people idle
@@ -348,7 +376,7 @@ your move C:  do nothing               → Dave gets to it eventually → <b cla
       score, and runs stay deterministic.</p>
       <p style="margin-top:1.8vh">What makes them feel real: <b>proactive outreach</b> (they
       ping you when something breaks), <b>realistic reply delays</b>, and honesty <b>shaped by
-      persona</b> — Maya hedges until you ask the right question; Dev over-shares a herring.
+      persona</b> — Sam hedges until you ask the right question; Dave over-shares a herring.
       You infer the truth from what they <b>do</b> (completions), not what they say.</p>
     </div>
   </div>
@@ -471,12 +499,12 @@ meetings are capped PER PERSON:
   <div class="ex">both anchors computed from the config file <span class="c">— before any agent runs</span>:
   unmanaged week ships <b>58%</b> of the work-weight   → score <b>0</b>
   best <b>solo</b> week ships 100%, early              → score <b>1</b>  <span class="c">(one owner/task)</span>
-  an agent ships 79%, mostly early                → score <b class="amber">0.41</b>
+  an agent ships 79%, mostly early                → score <b class="amber">0.41</b>  <span class="c">(% = work-weight shipped; SCORE also folds earliness, so it's not linear in %)</span>
   score <b class="green">&gt; 1</b> is real, not a bug — the agent <b>out-coordinated the solo optimum</b>:
   <span class="c">pulling idle teammates onto the bottleneck (parallel work, or a session) —
   a lever a one-owner schedule can't use. bounded by the caps. never clamped.</span></div>
   <p class="cap">Why an <i>unbeatable</i> ceiling isn't needed: the score is an <b>affine</b> map of COMBINED,
-  and GRPO advantages are affine-invariant (next slide) — so <b>1</b> only has to be a cheap, stable
+  and GRPO advantages are affine-invariant (the metrics slide) — so <b>1</b> only has to be a cheap, stable
   anchor. The gap's width IS the difficulty: how wrong the week's defaults are.</p>
 </section>
 
@@ -557,7 +585,7 @@ value ← <b>max</b> combined over all</div>
   </div>
   <p class="cap">Every lever is a number in a config file, so the band is <b>programmable</b>: a tuning
   loop <b>widens</b> it (more winnable) or <b>sharpens/spreads</b> it (which decisions it teaches) by editing
-  one seed number and re-measuring — crunch → mobile → bigweek walked winnable 7 → 10 → 26 this way.
+  one seed number and re-measuring — crunch → mobile → bigweek walked winnable 7 → 10 → 32 this way.
   One bound on all of them: a task must stay <b>completable</b> from the moment the PM could first know of it.</p>
 </section>
 
@@ -571,36 +599,19 @@ COMBINED   = (COMPLETION + γ·EFFICIENCY)/(1+γ)    <span class="c">the reward 
 FAIRNESS   = 1 − σ(hours worked / available)      <span class="c">team health, per person</span>
 SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position between the anchors</span>
            = a·COMBINED + b,  a &gt; 0 fixed per task <span class="c">an affine transform</span></div>
-  <div class="cols">
-    <div>
-      <table style="font-size:1.95vh">
-        <tr><th>term</th><th>meaning</th></tr>
-        <tr><td class="mono">w</td><td>authored priority weight — P0 8 · P1 4 · P2 2 · P3 1 <span class="sub">(agent-created tasks: w = 0)</span></td></tr>
-        <tr><td class="mono">progress, done</td><td>true fraction of effort completed ∈ [0,1]; done ∈ {0,1}</td></tr>
-        <tr><td class="mono">α = 0.5</td><td>finishing bonus — a shipped task beats an almost-done one</td></tr>
-        <tr><td class="mono">γ = 0.5</td><td>earliness weight in the combined scalar</td></tr>
-        <tr><td class="mono">horizon, span</td><td>Fri 17:00; span = horizon − Monday start</td></tr>
-        <tr><td class="mono">σ</td><td>spread (std dev) of workload across the workers</td></tr>
-      </table>
-      <p class="cap">GRPO's group normalization (r − mean)/std is <b style="color:var(--ink)">invariant
-      to affine transforms</b> — within one task, SCORE and raw COMBINED yield identical
-      advantages. The normalization changes nothing for training; its job is to put
-      hundreds of tasks on one scale.</p>
-    </div>
-    <div>
-      <table style="font-size:1.9vh">
-        <tr><th>what the reward actually TEACHES</th><th>crunch</th><th>bigweek</th></tr>
-        <tr><td>answer the blocking decision</td><td class="num">.93</td><td class="num">.95</td></tr>
-        <tr><td>route to specialists + reallocate</td><td class="num">.16</td><td class="num">.50</td></tr>
-        <tr><td>act early (timing)</td><td class="num">.78</td><td class="num">.49</td></tr>
-        <tr><td>channel discipline (focus tax)</td><td class="num sub">.03</td><td class="num sub">.01</td></tr>
-      </table>
-      <p class="cap">Not asserted — <b style="color:var(--ink)">measured</b>: an ablation audit plays
-      policies differing in one decision; the score it loses = that decision's share of the band.
-      <b>bigweek</b> spreads the signal across three levers; a one-bit task would pile it on one row.</p>
-
-    </div>
-  </div>
+  <table style="font-size:1.95vh">
+    <tr><th>term</th><th>meaning</th></tr>
+    <tr><td class="mono">w</td><td>authored priority weight — P0 8 · P1 4 · P2 2 · P3 1 <span class="sub">(agent-created tasks: w = 0)</span></td></tr>
+    <tr><td class="mono">progress, done</td><td>true fraction of effort completed ∈ [0,1]; done ∈ {0,1}</td></tr>
+    <tr><td class="mono">α = 0.5</td><td>finishing bonus — a shipped task beats an almost-done one</td></tr>
+    <tr><td class="mono">γ = 0.5</td><td>earliness weight in the combined scalar</td></tr>
+    <tr><td class="mono">horizon, span</td><td>Fri 17:00; span = horizon − Monday start</td></tr>
+    <tr><td class="mono">σ</td><td>spread (std dev) of workload across the workers</td></tr>
+  </table>
+  <p class="cap">GRPO's group normalization (r − mean)/std is <b style="color:var(--ink)">invariant
+  to affine transforms</b> — within one task, SCORE and raw COMBINED yield identical
+  advantages. The normalization changes nothing for training; its job is to put
+  hundreds of tasks on one scale.</p>
 </section>
 
 <!-- 10d · scope / what's not modelled -->
@@ -664,7 +675,7 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
   </div>
   <ul style="margin-top:3vh">
     <li>Difficulty is <b>measured, never asserted</b> — an ablation audit shows which decision owns which slice of the band.</li>
-    <li>Scales cleanly: from a 3-person crunch to a <b>21-task, 8-person week</b> (bigweek) — winnable band ~26, trajectory-classes 10^27.</li>
+    <li>Scales cleanly: from a 3-person crunch to a <b>21-task, 8-person week</b> (bigweek) — winnable band ~32, trajectory-classes 10^27.</li>
     <li>Deterministic end to end — <b>built for training</b>. Prompt-cached rollouts (~78% cheaper) keep long weeks affordable.</li>
     <li>Every benchmark point is <b>three clicks from its evidence</b>: task → run → full conversation.</li>
   </ul>
@@ -672,7 +683,7 @@ SCORE      = (agent − baseline)/(OPT − baseline)  <span class="c">position b
 
 <footer>
   <span>project_manager_sim</span>
-  <span id="pos">1 / 17</span>
+  <span id="pos">1 / 20</span>
   <span>← → to navigate</span>
 </footer>
 
